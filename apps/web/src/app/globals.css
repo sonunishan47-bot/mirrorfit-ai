@@ -1,0 +1,55 @@
+@import 'tailwindcss';
+
+/**
+ * Bridges the design tokens into Tailwind's utility layer.
+ *
+ * `inline` makes Tailwind emit `var(--mf-*)` references rather than resolved
+ * values, so the tokens stay overridable at runtime — which is what will let a
+ * future white-label deployment restyle a store without a rebuild.
+ */
+@theme inline {
+  --color-base: var(--mf-bg-base);
+  --color-raised: var(--mf-bg-raised);
+  --color-overlay: var(--mf-bg-overlay);
+
+  --color-primary: var(--mf-text-primary);
+  --color-secondary: var(--mf-text-secondary);
+  --color-muted: var(--mf-text-muted);
+
+  --color-accent: var(--mf-accent);
+  --color-accent-strong: var(--mf-accent-strong);
+  --color-accent-contrast: var(--mf-accent-contrast);
+
+  --color-danger: var(--mf-danger);
+  --color-success: var(--mf-success);
+
+  --radius-sm: var(--mf-radius-sm);
+  --radius-md: var(--mf-radius-md);
+  --radius-lg: var(--mf-radius-lg);
+
+  --ease-mf: var(--mf-ease);
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--mf-bg-base);
+    color: var(--mf-text-primary);
+    font-family:
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      'Segoe UI',
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@utility glass {
+  background-color: var(--mf-glass-fill);
+  border: 1px solid var(--mf-glass-border);
+  backdrop-filter: blur(var(--mf-glass-blur));
+}

@@ -1,0 +1,47 @@
+/**
+ * MirrorFit AI design tokens.
+ *
+ * Premium retail direction: near-black surfaces, restrained warm-metal accent,
+ * glass used sparingly. Exposed as CSS custom properties and registered with
+ * Tailwind v4 via `@theme inline` in the consuming app, so the same tokens
+ * drive both the mirror and the phone UI.
+ */
+
+:root {
+  --mf-bg-base: #08080a;
+  --mf-bg-raised: #0f0f13;
+  --mf-bg-overlay: #16161c;
+
+  --mf-glass-fill: rgb(255 255 255 / 4%);
+  --mf-glass-border: rgb(255 255 255 / 8%);
+  --mf-glass-blur: 20px;
+
+  --mf-text-primary: #f5f5f4;
+  --mf-text-secondary: #a8a29e;
+  --mf-text-muted: #6b6762;
+
+  --mf-accent: #c8a96a;
+  --mf-accent-strong: #e0c288;
+  --mf-accent-contrast: #100d06;
+
+  --mf-danger: #d4574a;
+  --mf-success: #4a9e7f;
+
+  --mf-radius-sm: 0.5rem;
+  --mf-radius-md: 0.875rem;
+  --mf-radius-lg: 1.5rem;
+
+  /* Slow, confident easing. Nothing should feel bouncy in a luxury store. */
+  --mf-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --mf-duration-fast: 160ms;
+  --mf-duration-base: 280ms;
+  --mf-duration-slow: 520ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --mf-duration-fast: 0ms;
+    --mf-duration-base: 0ms;
+    --mf-duration-slow: 0ms;
+  }
+}

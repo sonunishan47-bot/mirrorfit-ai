@@ -1,0 +1,9 @@
+# Supabase CLI configuration.
+#
+# Minimal on purpose. Local-stack settings (ports, auth providers, storage
+# limits) are added when local development against the CLI is set up; until
+# then this file only links the directory to the hosted project.
+#
+# Linked project: mirrorfit-ai (ptqqmlsdsgkpqygdsupq), region ap-south-1
+
+project_id = "mirrorfit-ai"

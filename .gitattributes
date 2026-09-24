@@ -1,0 +1,14 @@
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.avif binary
+*.glb binary
+*.gltf binary
+*.onnx binary
+*.tflite binary
+*.task binary
+
+pnpm-lock.yaml linguist-generated=true -diff

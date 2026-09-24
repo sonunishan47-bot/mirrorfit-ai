@@ -1,0 +1,60 @@
+---
+description: MirrorFit AI architecture boundaries and security invariants
+alwaysApply: true
+---
+
+# MirrorFit AI architecture rules
+
+## Package boundaries
+
+Dependencies flow in one direction. Do not introduce a cycle.
+
+```
+types  <-  validation  <-  protocol
+types  <-  tryon-core
+types  <-  ui
+all packages  <-  apps/web
+```
+
+- `@mirrorfit/types` has no runtime dependencies. Domain vocabulary only.
+- `@mirrorfit/validation` owns Zod primitives. Schemas derive from the const
+  objects in `types` so a value cannot drift between layers.
+- `@mirrorfit/protocol` owns the realtime wire format. It must not import
+  Supabase. Business logic depends on `RealtimeTransport`, never on a concrete
+  transport.
+- `@mirrorfit/tryon-core` owns the vision pipeline interfaces. It must not
+  import React or Next.
+
+## Security invariants
+
+These are not preferences.
+
+- Never trust a client-supplied `organization_id`, `shop_id`, `display_id`,
+  `role` or permission. Resolve tenancy server-side from the authenticated
+  principal.
+- The service role key appears only in modules that import `server-only`.
+- Every value crossing a trust boundary is parsed with Zod, not cast.
+- Pairing tokens are random, short-lived, single-use, revocable, and stored
+  only as a keyed hash.
+- Error responses returned to a customer device carry a coarse code and no
+  diagnostic detail.
+
+## Computer vision honesty
+
+- Pose landmarks plus a PNG overlay is not photorealistic try-on. Do not
+  describe it as such.
+- A stage that is not implemented is marked `TODO`, `PLACEHOLDER` or
+  `NOT PRODUCTION READY`. Do not ship a stub that reads as complete.
+- Performance figures come from recorded samples via `MetricsCollector`.
+  Never publish an estimated or hard-coded metric.
+- A metric with no samples reports `null`, not `0`.
+
+## Privacy
+
+- Raw camera frames stay on the mirror. Do not add an upload path to the
+  realtime loop.
+- Any image leaving the device requires an explicit, purpose-specific,
+  user-triggered consent record.
+- Do not infer ethnicity, race, religion, medical conditions or any other
+  sensitive attribute. Visual analysis is limited to product-matching signals.
+- Recommendations are phrased as suggestions, never as objective truth.
