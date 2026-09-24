@@ -3,6 +3,7 @@ import 'server-only';
 import { createClient } from '@supabase/supabase-js';
 import { clientEnv } from '@/env/client';
 import { getServerEnv } from '@/env/server';
+import type { Database } from './database.types';
 
 /**
  * Privileged Supabase client. Bypasses RLS entirely.
@@ -21,7 +22,7 @@ import { getServerEnv } from '@/env/server';
 export function createSupabaseAdminClient() {
   const { SUPABASE_SECRET_KEY } = getServerEnv();
 
-  return createClient(clientEnv.NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SECRET_KEY, {
+  return createClient<Database>(clientEnv.NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SECRET_KEY, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,

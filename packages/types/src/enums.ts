@@ -2,8 +2,12 @@
  * Canonical enum values for the MirrorFit AI domain.
  *
  * These arrays are the single source of truth. `@mirrorfit/validation` builds
- * Zod schemas from them and the SQL migrations mirror them as CHECK
- * constraints, so a value can only be added in one place.
+ * Zod schemas from them and the SQL migrations mirror them as native Postgres
+ * enum types, so a value can only be added in one place.
+ *
+ * Order is part of the contract where privilege depends on it. The database
+ * side is held to these exact values and ordering by the schema parity test in
+ * `apps/web/src/lib/supabase/schema-parity.test.ts`.
  */
 
 export const STAFF_ROLES = ['ORG_OWNER', 'ADMIN', 'MANAGER', 'STAFF'] as const;
