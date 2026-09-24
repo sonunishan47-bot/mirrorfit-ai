@@ -13,6 +13,24 @@
 export const STAFF_ROLES = ['ORG_OWNER', 'ADMIN', 'MANAGER', 'STAFF'] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
+/**
+ * Orders roles so a check can say "at least manager" without listing roles.
+ *
+ * This must agree with `app.role_rank()` in the tenancy migration, which is
+ * what the RLS policies use. The two are held together by a test rather than
+ * by discipline: if they disagree, the UI will offer an action the database
+ * then refuses, which is a confusing failure to debug.
+ */
+export function staffRoleRank(role: StaffRole): number {
+  return STAFF_ROLES.length - STAFF_ROLES.indexOf(role);
+}
+
+/** Rank required to manage displays, device credentials and staff. */
+export const ADMIN_ROLE_RANK = 3;
+
+/** Rank required to manage the garment catalog. */
+export const MANAGER_ROLE_RANK = 2;
+
 /** Who is acting. Device identity is deliberately separate from staff auth. */
 export const ACTOR_KINDS = ['STAFF', 'DEVICE', 'CUSTOMER', 'SYSTEM'] as const;
 export type ActorKind = (typeof ACTOR_KINDS)[number];

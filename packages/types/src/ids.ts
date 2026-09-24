@@ -17,6 +17,7 @@ export type ShopId = Branded<Uuid, 'ShopId'>;
 export type StaffUserId = Branded<Uuid, 'StaffUserId'>;
 export type DisplayId = Branded<Uuid, 'DisplayId'>;
 export type DeviceCredentialId = Branded<Uuid, 'DeviceCredentialId'>;
+export type DeviceEnrollmentCodeId = Branded<Uuid, 'DeviceEnrollmentCodeId'>;
 export type InstallationId = Branded<Uuid, 'InstallationId'>;
 export type GarmentId = Branded<Uuid, 'GarmentId'>;
 export type GarmentVariantId = Branded<Uuid, 'GarmentVariantId'>;

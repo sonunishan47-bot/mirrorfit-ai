@@ -62,9 +62,10 @@ export default tseslint.config(
     },
   },
 
-  // Build tooling lives outside the TypeScript projects.
+  // Build and test tooling lives outside the TypeScript projects, so the
+  // type-aware rules have no program to resolve it against.
   {
-    files: ['**/*.config.{js,mjs,ts}', 'eslint.config.mjs'],
+    files: ['**/*.config.{js,mjs,ts}', 'eslint.config.mjs', 'vitest.server-only.ts'],
     ...tseslint.configs.disableTypeChecked,
   },
 );

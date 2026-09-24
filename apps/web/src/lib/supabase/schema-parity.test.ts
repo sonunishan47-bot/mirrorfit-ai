@@ -80,6 +80,7 @@ const EXPECTED_TABLES = [
   'staff_users',
   'displays',
   'device_credentials',
+  'device_enrollment_codes',
   'device_heartbeats',
   'installations',
   'garments',
@@ -134,8 +135,11 @@ const sizeAdviceRecordsOutcome: 'accepted_size' extends keyof Tables<'size_recom
   : false = true;
 
 describe('the generated schema matches what the migrations were meant to create', () => {
-  it('defines exactly the twenty specified tables', () => {
-    expect(EXPECTED_TABLES).toHaveLength(20);
+  it('defines exactly the specified tables', () => {
+    // Twenty from the specification, plus device_enrollment_codes, which
+    // Phase 3 added because a mirror needs a way to obtain its first
+    // credential without a human ever handling the secret.
+    expect(EXPECTED_TABLES).toHaveLength(21);
     expect(tablesMatchTheSpecification).toBe(true);
   });
 

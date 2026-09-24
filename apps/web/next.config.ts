@@ -27,6 +27,12 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   transpilePackages: workspacePackages,
   typedRoutes: true,
+  /*
+   * Next writes AGENTS.md and CLAUDE.md on every dev run. This repository
+   * keeps its own guidance in .cursor/rules, and a file the framework
+   * rewrites on each start is exactly what broke `format:check` once already.
+   */
+  agentRules: false,
   headers: () =>
     Promise.resolve([
       {

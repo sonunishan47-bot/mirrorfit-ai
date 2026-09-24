@@ -290,6 +290,77 @@ export type Database = {
           },
         ]
       }
+      device_enrollment_codes: {
+        Row: {
+          claimed_at: string | null
+          claimed_credential_id: string | null
+          code_hash: string
+          created_at: string
+          created_by: string
+          display_id: string
+          expires_at: string
+          id: string
+          organization_id: string
+          revoked_at: string | null
+          shop_id: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          claimed_credential_id?: string | null
+          code_hash: string
+          created_at?: string
+          created_by: string
+          display_id: string
+          expires_at: string
+          id?: string
+          organization_id: string
+          revoked_at?: string | null
+          shop_id: string
+        }
+        Update: {
+          claimed_at?: string | null
+          claimed_credential_id?: string | null
+          code_hash?: string
+          created_at?: string
+          created_by?: string
+          display_id?: string
+          expires_at?: string
+          id?: string
+          organization_id?: string
+          revoked_at?: string | null
+          shop_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_enrollment_codes_claimed_credential_id_fkey"
+            columns: ["claimed_credential_id"]
+            isOneToOne: false
+            referencedRelation: "device_credentials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_enrollment_codes_created_by_organization_id_fkey"
+            columns: ["created_by", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "staff_users"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "device_enrollment_codes_display_id_organization_id_fkey"
+            columns: ["display_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "displays"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "device_enrollment_codes_display_id_shop_id_fkey"
+            columns: ["display_id", "shop_id"]
+            isOneToOne: false
+            referencedRelation: "displays"
+            referencedColumns: ["id", "shop_id"]
+          },
+        ]
+      }
       device_heartbeats: {
         Row: {
           app_version: string | null
@@ -1245,7 +1316,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      claim_device_enrollment_code: {
+        Args: { p_code_hash: string; p_payload: Json; p_secret_hash: string }
+        Returns: Json
+      }
+      issue_device_enrollment_code: {
+        Args: {
+          p_code_hash: string
+          p_display_id: string
+          p_staff_id: string
+          p_ttl_seconds: number
+        }
+        Returns: Json
+      }
+      record_device_heartbeat: {
+        Args: { p_display_id: string; p_payload: Json }
+        Returns: undefined
+      }
     }
     Enums: {
       actor_kind: "STAFF" | "DEVICE" | "CUSTOMER" | "SYSTEM"
@@ -1456,3 +1543,4 @@ export const Constants = {
     },
   },
 } as const
+

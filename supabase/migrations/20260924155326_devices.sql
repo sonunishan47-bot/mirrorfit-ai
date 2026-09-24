@@ -238,6 +238,14 @@ create policy device_credentials_update on public.device_credentials
 
 -- RLS is row-level, so the hash is withheld with a column privilege instead.
 -- Without this an admin could select it and replay it as a mirror.
+--
+-- WARNING: these two statements do nothing. A column-level revoke cannot
+-- subtract from the table-wide grant Supabase issues to `authenticated`;
+-- Postgres checks the table grant first and stops. Verified against
+-- information_schema, which still reported the privilege afterwards. They are
+-- left here because this migration has already been applied and migrations
+-- are not rewritten. The working form — revoke the table grant, then grant
+-- back only the safe columns — is in 20260924160338_privilege_hardening.sql.
 revoke select (secret_hash) on public.device_credentials from authenticated;
 revoke update (secret_hash) on public.device_credentials from authenticated;
 
