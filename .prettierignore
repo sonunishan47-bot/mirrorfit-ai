@@ -4,3 +4,8 @@ dist/
 coverage/
 pnpm-lock.yaml
 *.md
+
+# Generated files. Rewritten by their tools on every build, so formatting them
+# would make `format:check` fail immediately after any `next build`.
+next-env.d.ts
+**/database.types.ts
