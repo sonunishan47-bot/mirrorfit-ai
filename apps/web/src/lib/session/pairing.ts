@@ -1,14 +1,8 @@
 import 'server-only';
 
-/**
- * Where a customer's phone lands after scanning the QR code on a mirror.
- *
- * Kept in one place because the mirror renders this into a QR code and the
- * phone route has to read it back; two independently written strings here
- * would be a pairing failure nobody could reproduce.
- */
-export const PAIRING_PATH = '/s';
-export const PAIRING_TOKEN_PARAM = 't';
+import { PAIRING_PATH, PAIRING_TOKEN_PARAM } from './pairing-url';
+
+export { PAIRING_PATH, PAIRING_TOKEN_PARAM };
 
 /**
  * How long a QR code stays scannable by default.
