@@ -16,7 +16,6 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { SESSION_END_REASONS } from '@mirrorfit/protocol';
 import {
   ACTOR_KINDS,
   CONSENT_KINDS,
@@ -24,6 +23,7 @@ import {
   DEVICE_STATUSES,
   GARMENT_ASSET_KINDS,
   INSTALLATION_STATUSES,
+  SESSION_END_REASONS,
   SESSION_STATUSES,
   SIZE_LABELS,
   STAFF_ROLES,

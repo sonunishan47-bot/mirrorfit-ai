@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 
 import { deviceHeartbeatRequestSchema, parseJsonBody } from '@mirrorfit/validation';
 
+import { clientError } from '@/lib/api/errors';
 import { authenticateDevice } from '@/lib/device/authenticate';
-import { deviceError } from '@/lib/device/responses';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin-client';
 
 export const dynamic = 'force-dynamic';
@@ -29,12 +29,12 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: Request): Promise<NextResponse> {
   const device = await authenticateDevice(request);
   if (!device) {
-    return deviceError('UNAUTHORIZED');
+    return clientError('UNAUTHORIZED');
   }
 
   const parsed = await parseJsonBody(deviceHeartbeatRequestSchema, request);
   if (!parsed.ok) {
-    return deviceError('INVALID_REQUEST');
+    return clientError('INVALID_REQUEST');
   }
 
   const supabase = createSupabaseAdminClient();
@@ -52,7 +52,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   });
 
   if (error) {
-    return deviceError('INTERNAL');
+    return clientError('INTERNAL');
   }
 
   return NextResponse.json({ status: 'ok' }, { headers: { 'Cache-Control': 'no-store' } });

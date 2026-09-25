@@ -38,6 +38,25 @@ export type ActorKind = (typeof ACTOR_KINDS)[number];
 export const SESSION_STATUSES = ['WAITING', 'PAIRED', 'ACTIVE', 'ENDED', 'EXPIRED'] as const;
 export type SessionStatus = (typeof SESSION_STATUSES)[number];
 
+/**
+ * Why a session stopped.
+ *
+ * Lives here rather than in `@mirrorfit/protocol` even though the wire
+ * protocol carries it, because `public.session_end_reason` is a database enum
+ * and `@mirrorfit/validation` needs it to check the end-session route.
+ * Validation cannot import the protocol without inverting the dependency
+ * direction, so the vocabulary belongs at the bottom of the stack with every
+ * other enum the database mirrors.
+ */
+export const SESSION_END_REASONS = [
+  'CUSTOMER_ENDED',
+  'TIMEOUT',
+  'DISCONNECTED',
+  'STAFF_RESET',
+  'ERROR',
+] as const;
+export type SessionEndReason = (typeof SESSION_END_REASONS)[number];
+
 export const DEVICE_STATUSES = ['ONLINE', 'OFFLINE', 'MAINTENANCE', 'REVOKED'] as const;
 export type DeviceStatus = (typeof DEVICE_STATUSES)[number];
 

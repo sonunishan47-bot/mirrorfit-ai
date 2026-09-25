@@ -7,9 +7,9 @@ import {
   parseJsonBody,
 } from '@mirrorfit/validation';
 
+import { clientError } from '@/lib/api/errors';
 import { recordDeviceAction } from '@/lib/audit';
 import { generateDeviceSecret, sha256Hex } from '@/lib/crypto/secrets';
-import { deviceError } from '@/lib/device/responses';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin-client';
 
 export const dynamic = 'force-dynamic';
@@ -34,7 +34,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: Request): Promise<NextResponse> {
   const parsed = await parseJsonBody(deviceEnrollRequestSchema, request);
   if (!parsed.ok) {
-    return deviceError('INVALID_REQUEST');
+    return clientError('INVALID_REQUEST');
   }
 
   const secret = generateDeviceSecret();
@@ -57,12 +57,12 @@ export async function POST(request: Request): Promise<NextResponse> {
   // Every rejection reason collapses to one code. Telling a caller that a
   // code was real but expired confirms the guess was once correct.
   if (error || !data) {
-    return deviceError('INVALID_CODE');
+    return clientError('INVALID_CODE');
   }
 
   const claim = claimedEnrollmentSchema.safeParse(data);
   if (!claim.success) {
-    return deviceError('INTERNAL');
+    return clientError('INTERNAL');
   }
 
   await recordDeviceAction({

@@ -21,7 +21,15 @@ import { clientEnv } from '@/env/client';
  * to the login page so protected pages are not rendered just to redirect.
  */
 
-const PUBLIC_PATHS = ['/', '/login', '/api/health', '/api/device'];
+/**
+ * `/api/session` and `/s` are public because the two principals that use
+ * them are not staff and never will be: a mirror authenticates with a device
+ * bearer secret, and a customer's phone holds nothing but a scanned pairing
+ * token. Neither is a Supabase Auth user, so a redirect to the login page
+ * would be the wrong answer to an unauthenticated request. Those routes do
+ * their own authorisation.
+ */
+const PUBLIC_PATHS = ['/', '/login', '/api/health', '/api/device', '/api/session', '/s'];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));

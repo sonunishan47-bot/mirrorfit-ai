@@ -5,6 +5,7 @@ import {
   DEVICE_STATUSES,
   GARMENT_ASSET_KINDS,
   INSTALLATION_STATUSES,
+  SESSION_END_REASONS,
   SESSION_STATUSES,
   SIZE_LABELS,
   STAFF_ROLES,
@@ -16,6 +17,7 @@ import { z } from 'zod';
 export const staffRoleSchema = z.enum(STAFF_ROLES);
 export const actorKindSchema = z.enum(ACTOR_KINDS);
 export const sessionStatusSchema = z.enum(SESSION_STATUSES);
+export const sessionEndReasonSchema = z.enum(SESSION_END_REASONS);
 export const deviceStatusSchema = z.enum(DEVICE_STATUSES);
 export const installationStatusSchema = z.enum(INSTALLATION_STATUSES);
 export const customerRequestStatusSchema = z.enum(CUSTOMER_REQUEST_STATUSES);

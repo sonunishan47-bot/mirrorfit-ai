@@ -62,10 +62,16 @@ export default tseslint.config(
     },
   },
 
-  // Build and test tooling lives outside the TypeScript projects, so the
-  // type-aware rules have no program to resolve it against.
+  // Build, test and operator tooling lives outside the TypeScript projects,
+  // so the type-aware rules have no program to resolve it against.
   {
-    files: ['**/*.config.{js,mjs,ts}', 'eslint.config.mjs', 'vitest.server-only.ts'],
+    files: [
+      '**/*.config.{js,mjs,ts}',
+      'eslint.config.mjs',
+      'vitest.server-only.ts',
+      // Operator scripts are plain Node ESM, run directly and never bundled.
+      'apps/web/scripts/**/*.mjs',
+    ],
     ...tseslint.configs.disableTypeChecked,
   },
 );

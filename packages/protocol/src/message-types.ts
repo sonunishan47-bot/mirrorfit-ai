@@ -24,14 +24,11 @@ export type MessageType = (typeof MESSAGE_TYPES)[number];
 export const PARTICIPANT_ROLES = ['MIRROR', 'PHONE'] as const;
 export type ParticipantRole = (typeof PARTICIPANT_ROLES)[number];
 
-export const SESSION_END_REASONS = [
-  'CUSTOMER_ENDED',
-  'TIMEOUT',
-  'DISCONNECTED',
-  'STAFF_RESET',
-  'ERROR',
-] as const;
-export type SessionEndReason = (typeof SESSION_END_REASONS)[number];
+// Re-exported rather than redeclared. The canonical list is in
+// `@mirrorfit/types` because the database has a matching enum and
+// `@mirrorfit/validation` needs it too; keeping a second copy here is exactly
+// the drift the schema-parity test exists to catch.
+export { SESSION_END_REASONS, type SessionEndReason } from '@mirrorfit/types';
 
 export const PROTOCOL_ERROR_CODES = [
   'INVALID_MESSAGE',

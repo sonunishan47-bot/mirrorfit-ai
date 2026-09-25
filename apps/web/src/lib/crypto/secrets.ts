@@ -47,6 +47,19 @@ export function generateDeviceSecret(): string {
 }
 
 /**
+ * A single-use pairing token for one session's QR code.
+ *
+ * Same 256 bits as a device secret, and url-safe for the same reason: it
+ * travels as a query parameter in the URL the QR code encodes. It is not
+ * shortened for scannability, because a QR code is read by a camera and its
+ * density costs nothing, whereas this token is the only thing standing
+ * between a stranger and someone else's fitting session.
+ */
+export function generatePairingToken(): string {
+  return randomBytes(32).toString('base64url');
+}
+
+/**
  * The stored form of a code or secret.
  *
  * A plain sha-256 is the right choice here, which is worth stating because
