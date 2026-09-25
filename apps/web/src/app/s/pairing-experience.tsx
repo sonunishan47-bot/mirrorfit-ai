@@ -1,0 +1,168 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+
+import { BrandHeader } from '@/components/customer/brand-header';
+import { ErrorState } from '@/components/customer/error-state';
+import { PairingCard } from '@/components/customer/pairing-card';
+import { PrimaryButton } from '@/components/customer/primary-button';
+import { CustomerShell } from '@/components/customer/shell';
+import { StatusMessage } from '@/components/customer/status-message';
+import { claimPairingSession, type ClaimFailureReason } from '@/lib/customer/claim-client';
+import {
+  presentCustomer,
+  reduceCustomer,
+  type CustomerInvalidKind,
+  type CustomerStatus,
+} from '@/lib/customer/machine';
+import { inspectPairingSearch } from '@/lib/session/pairing-url';
+
+const PREPARE_MS = 700;
+const CONFIRM_MS = 800;
+
+export type PairingStartKind = 'loading' | 'ok' | 'missing' | 'malformed';
+
+export interface PairingExperienceProps {
+  readonly startKind?: PairingStartKind;
+  readonly readLocation?: () => { origin: string; search: string };
+  readonly claim?: typeof claimPairingSession;
+  readonly delayMs?: { prepare: number; confirm: number };
+}
+
+function statusFromStart(kind: PairingStartKind): CustomerStatus {
+  if (kind === 'ok') return 'READY';
+  if (kind === 'missing' || kind === 'malformed') return 'INVALID';
+  return 'LOADING';
+}
+
+function defaultLocation(): { origin: string; search: string } {
+  if (typeof window === 'undefined') {
+    return { origin: 'http://localhost', search: '' };
+  }
+  return { origin: window.location.origin, search: window.location.search };
+}
+
+function prefersReducedMotion(): boolean {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/**
+ * Customer pairing. The raw token stays in a ref and is sent only to
+ * POST /api/session/claim. It is never written into the DOM, logs, or storage.
+ */
+export function PairingExperience({
+  startKind = 'loading',
+  readLocation = defaultLocation,
+  claim = claimPairingSession,
+  delayMs,
+}: PairingExperienceProps) {
+  const tokenRef = useRef<string | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  const [status, setStatus] = useState<CustomerStatus>(() => statusFromStart(startKind));
+  const [invalidKind, setInvalidKind] = useState<CustomerInvalidKind>(
+    startKind === 'malformed' ? 'malformed' : 'missing',
+  );
+  const [failureKind, setFailureKind] = useState<ClaimFailureReason>('server');
+
+  const view = presentCustomer(status, { invalidKind, failureKind });
+
+  useEffect(() => {
+    const inspected = inspectPairingSearch(readLocation().origin, readLocation().search);
+    if (inspected.kind === 'ok') {
+      tokenRef.current = inspected.token;
+      setStatus((current) => reduceCustomer(current, 'TOKEN_READY'));
+      return;
+    }
+    tokenRef.current = null;
+    setInvalidKind(inspected.kind);
+    setStatus((current) =>
+      reduceCustomer(current, inspected.kind === 'missing' ? 'TOKEN_MISSING' : 'TOKEN_MALFORMED'),
+    );
+  }, [readLocation]);
+
+  useEffect(() => {
+    if (status !== 'CONNECTED' && status !== 'ACTIVATING') return;
+
+    const wait = prefersReducedMotion()
+      ? 0
+      : status === 'CONNECTED'
+        ? (delayMs?.prepare ?? PREPARE_MS)
+        : (delayMs?.confirm ?? CONFIRM_MS);
+    const event = status === 'CONNECTED' ? 'MIRROR_PREPARING' : 'MIRROR_CONFIRMED';
+    const timer = window.setTimeout(() => {
+      setStatus((current) => reduceCustomer(current, event));
+    }, wait);
+    return () => window.clearTimeout(timer);
+  }, [status, delayMs]);
+
+  function readToken(): string | null {
+    if (tokenRef.current) return tokenRef.current;
+    const inspected = inspectPairingSearch(readLocation().origin, readLocation().search);
+    if (inspected.kind === 'ok') {
+      tokenRef.current = inspected.token;
+      return inspected.token;
+    }
+    return null;
+  }
+
+  async function onConnect(): Promise<void> {
+    const token = readToken();
+    if (!token) return;
+
+    setStatus((current) => reduceCustomer(current, 'CONNECT'));
+    const outcome = await claim(token);
+    if (!outcome.ok) {
+      setFailureKind(outcome.reason);
+      setStatus((current) => reduceCustomer(current, 'CLAIM_FAILED'));
+      return;
+    }
+    sessionIdRef.current = outcome.sessionId;
+    setStatus((current) => reduceCustomer(current, 'CLAIMED'));
+  }
+
+  function onRetry(): void {
+    setStatus((current) => reduceCustomer(current, 'RETRY'));
+  }
+
+  return (
+    <CustomerShell>
+      <div className="flex flex-1 flex-col justify-between gap-12 py-6">
+        <BrandHeader />
+
+        <PairingCard className="my-auto">
+          <div className="space-y-8">
+            {view.tone === 'error' ? (
+              <ErrorState
+                title={view.title}
+                body={view.body}
+                action={
+                  view.action ? (
+                    <PrimaryButton onClick={onRetry}>{view.action}</PrimaryButton>
+                  ) : undefined
+                }
+              />
+            ) : (
+              <>
+                <StatusMessage
+                  title={view.title}
+                  body={view.body}
+                  live={status === 'READY' ? 'off' : 'polite'}
+                />
+                {view.action ? (
+                  <PrimaryButton busy={view.actionBusy} onClick={() => void onConnect()}>
+                    {view.action}
+                  </PrimaryButton>
+                ) : null}
+              </>
+            )}
+          </div>
+        </PairingCard>
+
+        <p className="text-center text-xs tracking-wide text-customer-quiet">
+          Fitting happens on the mirror in front of you.
+        </p>
+      </div>
+    </CustomerShell>
+  );
+}

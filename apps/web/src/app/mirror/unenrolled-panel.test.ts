@@ -2,10 +2,12 @@
 
 import { createElement } from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { UnenrolledPanel } from './unenrolled-panel';
+
+afterEach(cleanup);
 
 describe('unenrolled kiosk panel', () => {
   it('does not invent a credential and submits via button click, not a GET', () => {

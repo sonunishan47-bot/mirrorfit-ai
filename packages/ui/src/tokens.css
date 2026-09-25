@@ -31,6 +31,14 @@
   --mf-radius-md: 0.875rem;
   --mf-radius-lg: 1.5rem;
 
+  /* Customer phone surface. Separate from the dark kiosk/staff tokens. */
+  --mf-customer-bg: #f7f6f2;
+  --mf-customer-surface: #fffcf7;
+  --mf-customer-ink: #1a1916;
+  --mf-customer-muted: #6f6b64;
+  --mf-customer-forest: #1b3022;
+  --mf-customer-forest-contrast: #f7f6f2;
+
   /* Slow, confident easing. Nothing should feel bouncy in a luxury store. */
   --mf-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --mf-duration-fast: 160ms;

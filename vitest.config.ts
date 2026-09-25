@@ -9,6 +9,7 @@ export default defineConfig({
     alias: {
       // See vitest.server-only.ts for why this is needed.
       'server-only': fileURLToPath(new URL('./vitest.server-only.ts', import.meta.url)),
+      '@': fileURLToPath(new URL('./apps/web/src', import.meta.url)),
     },
   },
   test: {

@@ -27,6 +27,13 @@
   --radius-md: var(--mf-radius-md);
   --radius-lg: var(--mf-radius-lg);
 
+  --color-customer: var(--mf-customer-bg);
+  --color-customer-surface: var(--mf-customer-surface);
+  --color-customer-ink: var(--mf-customer-ink);
+  --color-customer-quiet: var(--mf-customer-muted);
+  --color-forest: var(--mf-customer-forest);
+  --color-forest-contrast: var(--mf-customer-forest-contrast);
+
   --ease-mf: var(--mf-ease);
 }
 

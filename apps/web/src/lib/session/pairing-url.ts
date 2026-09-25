@@ -17,6 +17,47 @@ export interface ParsedPairingUrl {
   readonly token: string;
 }
 
+export type PairingSearchInspection =
+  | { readonly kind: 'missing' }
+  | { readonly kind: 'malformed' }
+  | { readonly kind: 'ok'; readonly token: string };
+
+/**
+ * The token shape the claim route accepts. One regex, used by the kiosk QR
+ * and by `/s` so a phone cannot invent a second idea of "valid".
+ */
+export function parsePairingToken(raw: string | null | undefined): string | null {
+  if (typeof raw !== 'string' || !PAIRING_TOKEN.test(raw)) {
+    return null;
+  }
+  return raw;
+}
+
+/**
+ * Reads `t` from a query string and validates it through `parsePairingUrl`.
+ *
+ * Extra keys in the incoming search are ignored: the QR we mint never has
+ * them, and a customer who arrives with `?t=…&utm=…` should still pair.
+ */
+export function inspectPairingSearch(origin: string, search: string): PairingSearchInspection {
+  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  const raw = params.get(PAIRING_TOKEN_PARAM);
+  if (raw === null || raw === '') {
+    return { kind: 'missing' };
+  }
+
+  let url: URL;
+  try {
+    url = new URL(PAIRING_PATH, origin.endsWith('/') ? origin : `${origin}/`);
+  } catch {
+    return { kind: 'malformed' };
+  }
+  url.search = '';
+  url.searchParams.set(PAIRING_TOKEN_PARAM, raw);
+  const parsed = parsePairingUrl(url.toString());
+  return parsed ? { kind: 'ok', token: parsed.token } : { kind: 'malformed' };
+}
+
 /**
  * Accepts only the URL shape the create-session route returns: `/s?t=…`.
  *
@@ -41,8 +82,8 @@ export function parsePairingUrl(raw: string): ParsedPairingUrl | null {
     return null;
   }
 
-  const token = url.searchParams.get(PAIRING_TOKEN_PARAM);
-  if (!token || !PAIRING_TOKEN.test(token)) {
+  const token = parsePairingToken(url.searchParams.get(PAIRING_TOKEN_PARAM));
+  if (!token) {
     return null;
   }
 
