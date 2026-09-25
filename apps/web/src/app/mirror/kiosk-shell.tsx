@@ -97,8 +97,10 @@ export function KioskShell() {
         setCamera('live');
         raf = window.requestAnimationFrame(pump);
       })
-      .catch(() => {
-        if (!cancelled) setCamera('unavailable');
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        if (error instanceof Error && error.message.includes('cancelled')) return;
+        setCamera('unavailable');
       });
 
     return () => {

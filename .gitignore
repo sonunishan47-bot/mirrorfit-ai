@@ -2,6 +2,7 @@ node_modules/
 .pnpm-store/
 
 .next/
+apps/web/.certs/
 out/
 dist/
 build/

@@ -78,6 +78,7 @@ export class BrowserCameraProvider implements CameraProvider {
   #stream: MediaStream | null = null;
   #video: CameraVideoElement | null = null;
   #running = false;
+  #generation = 0;
 
   constructor(ports?: Partial<BrowserCameraPorts>) {
     this.#ports = {
@@ -96,24 +97,36 @@ export class BrowserCameraProvider implements CameraProvider {
       await this.stop();
     }
 
+    const generation = ++this.#generation;
     let stream: MediaStream | null = null;
+    let video: CameraVideoElement | null = null;
     try {
       stream = await this.#ports.getUserMedia(toMediaConstraints(constraints));
-      const video = this.#ports.createVideo();
+      if (generation !== this.#generation) {
+        throw new Error('Camera start was cancelled');
+      }
+      video = this.#ports.createVideo();
       video.muted = true;
       video.playsInline = true;
       video.srcObject = stream;
       await waitUntilPlayable(video);
+      if (generation !== this.#generation) {
+        throw new Error('Camera start was cancelled');
+      }
       this.#stream = stream;
       this.#video = video;
       this.#running = true;
     } catch (error) {
+      if (video) {
+        video.srcObject = null;
+      }
       stopStream(stream);
       throw error;
     }
   }
 
   async stop(): Promise<void> {
+    this.#generation += 1;
     const stream = this.#stream;
     const video = this.#video;
     this.#running = false;
@@ -154,20 +167,20 @@ export class BrowserCameraProvider implements CameraProvider {
 }
 
 function waitUntilPlayable(video: CameraVideoElement): Promise<void> {
-  if (video.videoWidth > 0 && video.videoHeight > 0) {
-    return video.play();
-  }
-
   return new Promise((resolve, reject) => {
-    const onReady = () => {
-      video.removeEventListener('loadedmetadata', onReady);
+    let settled = false;
+    const finish = () => {
+      if (settled || video.videoWidth === 0 || video.videoHeight === 0) return;
+      settled = true;
+      video.removeEventListener('loadedmetadata', finish);
       resolve();
     };
-    video.addEventListener('loadedmetadata', onReady);
-    video.play().then(() => {
+    video.addEventListener('loadedmetadata', finish);
+    void video.play().then(finish, (error) => {
+      if (settled) return;
       if (video.videoWidth > 0 && video.videoHeight > 0) {
-        onReady();
+        reject(error);
       }
-    }, reject);
+    });
   });
 }

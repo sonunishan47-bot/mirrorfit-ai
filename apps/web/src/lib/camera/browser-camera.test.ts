@@ -103,6 +103,28 @@ describe('start/stop lifecycle', () => {
     expect(frame?.source).toBe(video);
   });
 
+  it('can start again after stop without leaking the first stream', async () => {
+    const first = createFakeTrack();
+    const second = createFakeTrack();
+    const streams = [createFakeStream([first]), createFakeStream([second])];
+    const camera = new BrowserCameraProvider({
+      getUserMedia: () => Promise.resolve(streams.shift() ?? createFakeStream([])),
+      createVideo: () => createFakeVideo(640, 480),
+    });
+
+    await camera.start(CONSTRAINTS);
+    await camera.stop();
+    expect(first.stopped).toBe(true);
+
+    await camera.start(CONSTRAINTS);
+    expect(camera.isRunning).toBe(true);
+    expect(second.stopped).toBe(false);
+    expect(camera.readFrame()).not.toBeNull();
+
+    await camera.stop();
+    expect(second.stopped).toBe(true);
+  });
+
   it('stops the tracks and forgets the frame', async () => {
     const track = createFakeTrack();
     const video = createFakeVideo(640, 480);
@@ -117,6 +139,27 @@ describe('start/stop lifecycle', () => {
     expect(camera.isRunning).toBe(false);
     expect(track.stopped).toBe(true);
     expect(video.srcObject).toBeNull();
+    expect(camera.readFrame()).toBeNull();
+  });
+
+  it('stops a stream if dispose happens while getUserMedia is in flight', async () => {
+    const track = createFakeTrack();
+    let release: ((stream: MediaStream) => void) | undefined;
+    const pending = new Promise<MediaStream>((resolve) => {
+      release = resolve;
+    });
+    const camera = new BrowserCameraProvider({
+      getUserMedia: () => pending,
+      createVideo: () => createFakeVideo(640, 480),
+    });
+
+    const starting = camera.start(CONSTRAINTS);
+    await camera.dispose();
+    release?.(createFakeStream([track]));
+
+    await expect(starting).rejects.toThrow(/cancelled/);
+    expect(track.stopped).toBe(true);
+    expect(camera.isRunning).toBe(false);
     expect(camera.readFrame()).toBeNull();
   });
 

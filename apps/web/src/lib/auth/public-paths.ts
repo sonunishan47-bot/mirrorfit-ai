@@ -14,6 +14,7 @@ export const PUBLIC_PATHS = [
   '/api/session',
   '/s',
   '/mirror',
+  '/dev-ca',
 ] as const;
 
 export function isPublicPath(pathname: string): boolean {

@@ -141,10 +141,10 @@ export default async function DisplaysPage() {
                   {canManage ? (
                     <div className="flex flex-wrap items-center gap-4 border-t border-white/10 pt-3">
                       {credential ? (
-                        <p className="text-xs text-secondary">
+                        <div className="text-xs text-secondary">
                           Enrolled · last used {relativeTime(credential.last_used_at)} ·{' '}
                           <RevokeCredentialForm credentialId={credential.id} />
-                        </p>
+                        </div>
                       ) : (
                         <IssueCodeForm displayId={display.id} />
                       )}

@@ -20,6 +20,11 @@ describe('kiosk and device paths stay off the login redirect', () => {
     expect(isPublicPath('/s/')).toBe(true);
   });
 
+  it('treats /dev-ca as public so an iPhone can install the local CA', () => {
+    expect(PUBLIC_PATHS).toContain('/dev-ca');
+    expect(isPublicPath('/dev-ca')).toBe(true);
+  });
+
   it('keeps the device and session APIs public', () => {
     expect(isPublicPath('/api/device/enroll')).toBe(true);
     expect(isPublicPath('/api/session/create')).toBe(true);

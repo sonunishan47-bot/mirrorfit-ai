@@ -16,6 +16,12 @@ describe('pairing URL shape', () => {
     expect(parsed?.token).toBe(TOKEN);
   });
 
+  it('accepts the HTTPS LAN pairing URL the physical kiosk must encode', () => {
+    const parsed = parsePairingUrl(`https://172.20.10.10:3111/s?t=${TOKEN}`);
+    expect(parsed?.token).toBe(TOKEN);
+    expect(parsed?.url).toBe(`https://172.20.10.10:3111/s?t=${TOKEN}`);
+  });
+
   it('accepts a 43-character token and rejects a short one', () => {
     expect(parsePairingToken(TOKEN)).toBe(TOKEN);
     expect(parsePairingToken('short')).toBeNull();
