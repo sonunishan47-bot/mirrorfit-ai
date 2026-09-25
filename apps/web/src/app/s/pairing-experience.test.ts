@@ -3,7 +3,7 @@
 import { createElement } from 'react';
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PairingExperience } from './pairing-experience';
 
@@ -34,7 +34,17 @@ function pageText(): string {
   return document.body.textContent ?? '';
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+beforeEach(() => {
+  vi.stubGlobal(
+    'fetch',
+    async () => new Response(JSON.stringify({ garments: [] }), { status: 200 }),
+  );
+});
 
 describe('customer /s pairing experience', () => {
   it('shows a missing-token state without inventing a session', async () => {
@@ -84,6 +94,7 @@ describe('customer /s pairing experience', () => {
 
     expect(await screen.findByText('Mirror Ready')).toBeTruthy();
     expect(screen.getByText('You can now use the mirror.')).toBeTruthy();
+    expect(await screen.findByText('No garments are available for this shop yet. Nothing is invented here.')).toBeTruthy();
     expect(pageText()).not.toContain(TOKEN);
   });
 

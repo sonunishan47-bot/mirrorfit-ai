@@ -4,7 +4,8 @@ import type { BodyGeometry, FittingResult, PoseFrame } from './geometry';
  * Stage contracts for the live fitting pipeline.
  *
  * ---------------------------------------------------------------------------
- * STATUS: interfaces only. No implementation of any of these exists yet.
+ * STATUS: contracts for the live pipeline. Pose is implemented by
+ * MediaPipePoseProvider (web). Segmentation remains UnavailableSegmentationProvider.
  * ---------------------------------------------------------------------------
  *
  * Nothing in this file performs computer vision. These are the seams that let
@@ -62,7 +63,11 @@ export interface CameraProvider extends Disposable {
 export interface PoseProvider extends Disposable {
   initialize(): Promise<void>;
   estimate(frame: CameraFrame): Promise<PoseFrame | null>;
+  /** Same contract as `estimate`. Kept so a pipeline can say processFrame. */
+  processFrame(frame: CameraFrame): Promise<PoseFrame | null>;
   readonly name: string;
+  readonly availability: 'ready' | 'unavailable' | 'initializing';
+  readonly lastError?: string | null;
 }
 
 /** Person/background separation, used for correct garment layering. */
@@ -78,6 +83,8 @@ export interface SegmentationProvider extends Disposable {
   initialize(): Promise<void>;
   segment(frame: CameraFrame): Promise<SegmentationMask | null>;
   readonly name: string;
+  readonly availability: 'ready' | 'unavailable' | 'initializing';
+  readonly lastError?: string | null;
 }
 
 export interface DepthMap {

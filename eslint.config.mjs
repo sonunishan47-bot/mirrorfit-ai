@@ -19,6 +19,8 @@ export default tseslint.config(
       '**/next-env.d.ts',
       // Emitted by `supabase gen types`; not ours to satisfy.
       '**/database.types.ts',
+      // Official MediaPipe WASM copied from @mediapipe/tasks-vision at build time.
+      'apps/web/public/mediapipe/**',
     ],
   },
 

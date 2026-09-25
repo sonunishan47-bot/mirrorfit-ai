@@ -23,6 +23,7 @@ import {
   eventFromLiveSession,
   readLiveSession,
 } from '@/lib/kiosk/session-client';
+import { TryOnPanel } from './tryon-panel';
 import { UnenrolledPanel } from './unenrolled-panel';
 
 const CAMERA_CONSTRAINTS = { width: 1920, height: 1080, frameRate: 30 } as const;
@@ -54,6 +55,12 @@ export function KioskShell() {
   const [qrSvg, setQrSvg] = useState<string | null>(null);
   const [enrollError, setEnrollError] = useState<string | null>(null);
   const [openAttempt, setOpenAttempt] = useState(0);
+  const [selectedGarment, setSelectedGarment] = useState<{
+    garmentId: string;
+    variantId: string;
+    category?: string | null;
+    isTestFixture?: boolean;
+  } | null>(null);
 
   const view = presentKiosk(status);
   const qrValue = pairingQrValue(pairingUrl, device?.deviceSecret ?? null);
@@ -174,6 +181,21 @@ export function KioskShell() {
         try {
           const live = await readLiveSession(device.deviceSecret);
           const event = eventFromLiveSession(live, sessionId, Date.now());
+          if (live?.selectedGarment !== undefined) {
+            const next = live.selectedGarment;
+            setSelectedGarment((current) => {
+              if (!next && !current) return current;
+              if (
+                current?.garmentId === next?.garmentId &&
+                current?.variantId === next?.variantId &&
+                current?.category === next?.category &&
+                current?.isTestFixture === next?.isTestFixture
+              ) {
+                return current;
+              }
+              return next ?? null;
+            });
+          }
           if (event === 'PAIRING_CLAIMED' && statusRef.current === 'WAITING') {
             setPairingUrl(null);
             setStatus((current) => reduceKiosk(current, 'PAIRING_CLAIMED'));
@@ -230,6 +252,7 @@ export function KioskShell() {
     sessionIdRef.current = null;
     setPairingUrl(null);
     setQrSvg(null);
+    setSelectedGarment(null);
   }
 
   async function onEnroll(formData: FormData): Promise<void> {
@@ -304,6 +327,16 @@ export function KioskShell() {
               ) : null}
 
               <p className="max-w-md text-sm text-muted">{view.honesty}</p>
+
+              {status === 'ACTIVE' ? (
+                <TryOnPanel
+                  active
+                  getFrame={() => cameraRef.current?.readFrame() ?? null}
+                  selectedGarment={selectedGarment}
+                  selectedCategory={selectedGarment?.category ?? null}
+                  selectedIsTestFixture={selectedGarment?.isTestFixture === true}
+                />
+              ) : null}
 
               {status === 'ACTIVE' || status === 'PAIRED' || status === 'WAITING' ? (
                 <button

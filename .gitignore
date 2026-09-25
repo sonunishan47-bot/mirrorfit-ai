@@ -3,6 +3,7 @@ node_modules/
 
 .next/
 apps/web/.certs/
+apps/web/public/mediapipe/
 out/
 dist/
 build/

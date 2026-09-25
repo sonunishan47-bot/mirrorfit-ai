@@ -6,40 +6,14 @@
  * downstream fitting code.
  */
 
+import type { PoseLandmarkName } from '@mirrorfit/types';
+
+export { POSE_LANDMARKS, type PoseLandmarkName } from '@mirrorfit/types';
+
 export interface Point2D {
   readonly x: number;
   readonly y: number;
 }
-
-/**
- * COCO-17 keypoint vocabulary.
- *
- * Chosen because it is the common denominator across pose models, which keeps
- * `PoseProvider` implementations interchangeable. A richer model can expose
- * extra landmarks through its own extension type without breaking this
- * contract.
- */
-export const POSE_LANDMARKS = [
-  'NOSE',
-  'LEFT_EYE',
-  'RIGHT_EYE',
-  'LEFT_EAR',
-  'RIGHT_EAR',
-  'LEFT_SHOULDER',
-  'RIGHT_SHOULDER',
-  'LEFT_ELBOW',
-  'RIGHT_ELBOW',
-  'LEFT_WRIST',
-  'RIGHT_WRIST',
-  'LEFT_HIP',
-  'RIGHT_HIP',
-  'LEFT_KNEE',
-  'RIGHT_KNEE',
-  'LEFT_ANKLE',
-  'RIGHT_ANKLE',
-] as const;
-
-export type PoseLandmarkName = (typeof POSE_LANDMARKS)[number];
 
 export interface Keypoint extends Point2D {
   readonly name: PoseLandmarkName;
@@ -71,6 +45,11 @@ export interface BodyGeometry {
   readonly yaw: number;
   /** Lean in the image plane, radians. */
   readonly roll: number;
+  /** Midpoint of the two shoulders. TOP overlays hang from here. */
+  readonly shoulderCenter: Point2D;
+  /** Midpoint of the two hips. */
+  readonly hipCenter: Point2D;
+  /** Midpoint of shoulder and hip centers. */
   readonly center: Point2D;
 }
 

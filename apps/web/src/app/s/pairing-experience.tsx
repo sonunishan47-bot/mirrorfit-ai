@@ -16,6 +16,7 @@ import {
   type CustomerStatus,
 } from '@/lib/customer/machine';
 import { inspectPairingSearch } from '@/lib/session/pairing-url';
+import { SessionCatalog } from './session-catalog';
 
 const PREPARE_MS = 700;
 const CONFIRM_MS = 800;
@@ -154,6 +155,7 @@ export function PairingExperience({
                     {view.action}
                   </PrimaryButton>
                 ) : null}
+                {status === 'MIRROR_READY' ? <SessionCatalog readToken={readToken} /> : null}
               </>
             )}
           </div>

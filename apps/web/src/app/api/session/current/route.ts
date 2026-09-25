@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { clientError } from '@/lib/api/errors';
 import { authenticateDevice } from '@/lib/device/authenticate';
+import { readSelectedGarment } from '@/lib/session/session-garment';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin-client';
 
 export const dynamic = 'force-dynamic';
@@ -38,12 +39,15 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.json({ session: null }, { headers: { 'Cache-Control': 'no-store' } });
   }
 
+  const selected = await readSelectedGarment(data.id);
+
   return NextResponse.json(
     {
       session: {
         session_id: data.id,
         status: data.status,
         pairing_expires_at: data.pairing_expires_at,
+        selected_garment: selected,
       },
     },
     { headers: { 'Cache-Control': 'no-store' } },

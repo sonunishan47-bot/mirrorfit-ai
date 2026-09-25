@@ -12,10 +12,18 @@ export interface CreatedKioskSession {
   readonly pairingExpiresAt: string;
 }
 
+export interface SelectedKioskGarment {
+  readonly garmentId: string;
+  readonly variantId: string;
+  readonly category?: string | null;
+  readonly isTestFixture?: boolean;
+}
+
 export interface LiveKioskSession {
   readonly sessionId: string;
   readonly status: string;
   readonly pairingExpiresAt: string | null;
+  readonly selectedGarment?: SelectedKioskGarment | null;
 }
 
 export interface EnrolledDevice {
@@ -118,6 +126,21 @@ export async function readLiveSession(
     status: record['status'],
     pairingExpiresAt:
       typeof record['pairing_expires_at'] === 'string' ? record['pairing_expires_at'] : null,
+    selectedGarment: readSelectedGarment(record['selected_garment']),
+  };
+}
+
+function readSelectedGarment(value: unknown): SelectedKioskGarment | null {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as Record<string, unknown>;
+  if (typeof row['garment_id'] !== 'string' || typeof row['variant_id'] !== 'string') {
+    return null;
+  }
+  return {
+    garmentId: row['garment_id'],
+    variantId: row['variant_id'],
+    category: typeof row['category'] === 'string' ? row['category'] : null,
+    isTestFixture: row['is_test_fixture'] === true,
   };
 }
 

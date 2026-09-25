@@ -3,4 +3,5 @@ export * from './enums';
 export * from './parse';
 export * from './devices';
 export * from './sessions';
+export * from './pose';
 export { z } from 'zod';
