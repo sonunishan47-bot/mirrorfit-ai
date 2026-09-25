@@ -27,8 +27,38 @@
  */
 
 import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { createClient } from '@supabase/supabase-js';
+
+/**
+ * File-wins load of `.env.local`. Node `--env-file` will not override a
+ * `SUPABASE_SECRET_KEY` already present in the parent process, which is
+ * how an inherited (and wrong) key can silently win.
+ */
+function loadDotEnvLocal() {
+  const file = resolve(dirname(fileURLToPath(import.meta.url)), '..', '.env.local');
+  const text = readFileSync(file, 'utf8');
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq === -1) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    process.env[key] = value;
+  }
+}
+
+loadDotEnvLocal();
 
 function parseArgs(argv) {
   const args = {};

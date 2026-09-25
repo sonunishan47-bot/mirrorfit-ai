@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "next typegen && tsc -p tsconfig.json",
-    "provision-tenant": "node --env-file=.env.local scripts/provision-tenant.mjs"
+    "provision-tenant": "node --env-file=.env.local scripts/provision-tenant.mjs",
+    "e2e": "node --env-file=.env.local scripts/e2e-phase3.mjs"
   },
   "dependencies": {
     "@mirrorfit/protocol": "workspace:*",
