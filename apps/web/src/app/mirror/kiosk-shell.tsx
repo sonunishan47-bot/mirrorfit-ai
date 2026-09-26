@@ -43,6 +43,7 @@ import {
   readLiveSession,
 } from '@/lib/kiosk/session-client';
 import { createSessionLifecycle } from '@/lib/kiosk/session-lifecycle';
+import { kioskSessionPollMs } from '@/lib/kiosk/session-poll';
 import { KioskScreensaver } from './kiosk-screensaver';
 import { TryOnPanel } from './tryon-panel';
 import { UnenrolledPanel } from './unenrolled-panel';
@@ -50,7 +51,6 @@ import { UnenrolledPanel } from './unenrolled-panel';
 const CAMERA_CONSTRAINTS = { width: 1920, height: 1080, frameRate: 30 } as const;
 /** Must exceed BrowserCameraProvider playTimeoutMs so play can finish first. */
 const CAMERA_START_MS = 12_000;
-const POLL_MS = 1000;
 const RESET_MS = 1600;
 const POWER_SAVE_TICK_MS = 1_000;
 /** While power-saving, FPS sample pump runs at a low cadence instead of every RAF. */
@@ -417,7 +417,7 @@ export function KioskShell() {
 
     const poll = window.setInterval(() => {
       void runPoll();
-    }, POLL_MS);
+    }, kioskSessionPollMs(status));
     void runPoll();
 
     const onOnline = () => {

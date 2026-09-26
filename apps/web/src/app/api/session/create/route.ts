@@ -7,6 +7,7 @@ import {
 } from '@mirrorfit/validation';
 
 import { clientError } from '@/lib/api/errors';
+import { createSessionRateLimiter } from '@/lib/api/rate-limit';
 import { generatePairingToken, sha256Hex } from '@/lib/crypto/secrets';
 import { authenticateDevice } from '@/lib/device/authenticate';
 import { buildPairingUrl, DEFAULT_PAIRING_TTL_SECONDS } from '@/lib/session/pairing';
@@ -39,13 +40,17 @@ export const dynamic = 'force-dynamic';
  * and writing an audit row per session would bury the events that matter.
  * The sessions table is itself the record.
  *
- * TODO (Phase 15): rate limit by credential. A valid but misbehaving mirror
- * can currently churn sessions as fast as it can call this.
+ * In-process rate limit by display id (30/min). Phase 15: distributed.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   const device = await authenticateDevice(request);
   if (!device) {
     return clientError('UNAUTHORIZED');
+  }
+
+  const limited = createSessionRateLimiter.check(device.displayId);
+  if (!limited.ok) {
+    return clientError('RATE_LIMITED', { retryAfterMs: limited.retryAfterMs });
   }
 
   const parsed = await parseJsonBody(sessionCreateRequestSchema, request);

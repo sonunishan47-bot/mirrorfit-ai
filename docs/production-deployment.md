@@ -51,9 +51,33 @@ Production garment overlays use the private `garment-assets` Storage bucket (see
 
 ## MediaPipe assets
 
-`pnpm build` / `pnpm dev` run `apps/web/scripts/copy-mediapipe-wasm.mjs`, which copies `@mediapipe/tasks-vision` WASM into `apps/web/public/mediapipe/wasm`. The Pose Landmarker `.task` model is fetched at runtime from Google’s documented `storage.googleapis.com` URL (allowed in CSP `connect-src`).
+`pnpm build` / `pnpm dev` run `apps/web/scripts/copy-mediapipe-wasm.mjs`, which:
 
-## Production build and start
+1. Copies `@mediapipe/tasks-vision` WASM into `apps/web/public/mediapipe/wasm`.
+2. Downloads the official Pose Landmarker `.task` once into
+   `apps/web/public/mediapipe/models/pose_landmarker_lite.task` (gitignored).
+
+The **browser loads the model same-origin** — it does not call
+`storage.googleapis.com` at runtime. Build/dev machines need outbound HTTPS to
+Google storage on first install (or after deleting `public/mediapipe/`). Offline
+kiosk browsers are fine once the model is on disk.
+
+## Local kiosk recover (Turbopack / IP drift)
+
+If `https://<lan>:3111/mirror` listens but never responds, or the phone HTTPS
+SAN no longer matches after a hotspot/Wi-Fi change:
+
+```bash
+pnpm --filter @mirrorfit/web kiosk-recover
+# force SAN cert rebuild even if hosts.json still matches:
+pnpm --filter @mirrorfit/web kiosk-recover -- --force-certs
+pnpm --filter @mirrorfit/web dev
+```
+
+`kiosk-recover` deletes `apps/web/.next/dev` (and `.next/cache`), regenerates
+the LAN HTTPS certificate when interfaces changed, and prints the SAN hosts.
+Prefer cloning the repo **outside OneDrive** on the permanent kiosk PC — synced
+folders have corrupted Turbopack’s pack database on Windows.
 
 From the repository root:
 

@@ -1,44 +1,54 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { UnavailablePoseProvider } from '@mirrorfit/tryon-core';
+import {
+  firstPersonLandmarks,
+  MediaPipePoseProvider,
+  MEDIAPIPE_POSE_MODEL_DOWNLOAD_URL,
+  MEDIAPIPE_POSE_MODEL_PATH,
+  MEDIAPIPE_POSE_MODEL_URL,
+  probeLocalPoseModel,
+} from './mediapipe-pose-provider';
 
-import { createKioskPoseProvider, firstPersonLandmarks, MediaPipePoseProvider } from './mediapipe-pose-provider';
+describe('local pose model paths', () => {
+  it('serves the model same-origin and pins the Google download URL for the ensure script', () => {
+    expect(MEDIAPIPE_POSE_MODEL_PATH).toBe('/mediapipe/models/pose_landmarker_lite.task');
+    expect(MEDIAPIPE_POSE_MODEL_URL).toBe(MEDIAPIPE_POSE_MODEL_PATH);
+    expect(MEDIAPIPE_POSE_MODEL_DOWNLOAD_URL).toBe(
+      'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+    );
+  });
+});
 
-describe('MediaPipe pose provider in Node', () => {
-  it('fails initialize without a browser window and does not invent landmarks', async () => {
-    const provider = new MediaPipePoseProvider();
-    await provider.initialize();
-    expect(provider.availability).toBe('unavailable');
-    expect(provider.lastError).toMatch(/browser window|WebAssembly|failed/i);
-    expect(
-      await provider.processFrame({
-        timestampMs: 1,
-        width: 1280,
-        height: 720,
-        source: {} as CanvasImageSource,
-      }),
-    ).toBeNull();
-    await provider.dispose();
+describe('probeLocalPoseModel', () => {
+  it('treats a successful HEAD as present', async () => {
+    const fetchFn = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    await expect(
+      probeLocalPoseModel('/mediapipe/models/pose_landmarker_lite.task', fetchFn),
+    ).resolves.toBe(true);
+    expect(fetchFn).toHaveBeenCalledWith('/mediapipe/models/pose_landmarker_lite.task', {
+      method: 'HEAD',
+      cache: 'no-store',
+    });
   });
 
-  it('falls back to UnavailablePoseProvider after a failed create', async () => {
-    const provider = await createKioskPoseProvider();
-    expect(provider).toBeInstanceOf(UnavailablePoseProvider);
-    expect(provider.availability).toBe('unavailable');
-    expect(provider.lastError).toBeTruthy();
-    await provider.dispose();
+  it('fails closed on 404 without inventing a remote fallback', async () => {
+    const fetchFn = vi.fn().mockResolvedValue({ ok: false, status: 404 });
+    await expect(
+      probeLocalPoseModel('/mediapipe/models/pose_landmarker_lite.task', fetchFn),
+    ).resolves.toBe(false);
   });
 
-  it('can be initialized again after dispose without leaking a landmarker', async () => {
-    const provider = new MediaPipePoseProvider();
-    await provider.initialize();
-    await provider.dispose();
-    await provider.initialize();
-    expect(provider.availability).toBe('unavailable');
-    await provider.dispose();
+  it('falls back to ranged GET when HEAD is unsupported', async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 405 })
+      .mockResolvedValueOnce({ ok: false, status: 206 });
+    await expect(probeLocalPoseModel('/mediapipe/models/x.task', fetchFn)).resolves.toBe(true);
   });
+});
 
-  it('survives dispose during initialize without inventing landmarks (ACTIVE cycle)', async () => {
+describe('MediaPipePoseProvider dispose', () => {
+  it('ignores a late initialize after dispose (no orphan landmarker lifecycle)', async () => {
     const provider = new MediaPipePoseProvider();
     const init = provider.initialize();
     await provider.dispose();

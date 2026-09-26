@@ -20,8 +20,6 @@ export type SecurityHeaderOptions = {
   readonly supabaseUrl: string;
 };
 
-const MEDIAPIPE_MODEL_ORIGIN = 'https://storage.googleapis.com';
-
 /**
  * Why `unsafe-inline` appears in script-src
  * ----------------------------------------
@@ -31,6 +29,9 @@ const MEDIAPIPE_MODEL_ORIGIN = 'https://storage.googleapis.com';
  *
  * `unsafe-eval` is intentionally absent: production chunks do not need it.
  * MediaPipe WASM compilation uses `'wasm-unsafe-eval'` instead.
+ *
+ * Pose Landmarker `.task` is served same-origin from `/mediapipe/models`
+ * (vendored at build/dev). `storage.googleapis.com` is not in connect-src.
  */
 export function buildContentSecurityPolicy(options: SecurityHeaderOptions): string {
   const supabase = supabaseOrigins(options.supabaseUrl);
@@ -44,7 +45,7 @@ export function buildContentSecurityPolicy(options: SecurityHeaderOptions): stri
     "style-src 'self' 'unsafe-inline'",
     // Overlay decode may fall back to blob: object URLs; signed PNGs are fetched.
     `img-src 'self' data: blob: ${supabase.https}`,
-    `connect-src 'self' ${supabase.https} ${supabase.wss} ${MEDIAPIPE_MODEL_ORIGIN}`,
+    `connect-src 'self' ${supabase.https} ${supabase.wss}`,
     "font-src 'self'",
     "worker-src 'self' blob:",
     "media-src 'self' blob:",

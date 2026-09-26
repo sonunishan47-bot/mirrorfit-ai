@@ -14,16 +14,24 @@ import { DEV_CA_HTTP_PORT, startDevCaHttpServer } from './serve-dev-ca.mjs';
 
 const PORT = process.env.PORT ?? '3111';
 
-const { keyPath, certPath, caPath, hosts } = await ensureDevCerts();
+const { keyPath, certPath, caPath, hosts, regenerated } = await ensureDevCerts();
 const lan = preferredLanHost(hosts);
 const nextBin = createRequire(import.meta.url).resolve('next/dist/bin/next');
 
 const caServer = startDevCaHttpServer(caPath);
 
 console.log(`HTTPS kiosk hosts in this certificate: ${hosts.join(', ')}`);
+if (regenerated) {
+  console.log(
+    'SAN certificate was regenerated (LAN addresses changed). Use the mirror URL below — stale IP bookmarks will fail HTTPS.',
+  );
+}
 console.log(`Open the physical mirror at https://${lan}:${PORT}/mirror`);
 console.log('Trust the local CA once (Windows): pnpm.cmd --filter @mirrorfit/web trust-dev-ca');
 console.log(`iPhone CA install (HTTP, before Safari trusts HTTPS): http://${lan}:${DEV_CA_HTTP_PORT}/dev-ca`);
+console.log(
+  'Stuck Turbopack / dead :3111 after OneDrive sync: pnpm.cmd --filter @mirrorfit/web kiosk-recover',
+);
 
 const child = spawn(
   process.execPath,

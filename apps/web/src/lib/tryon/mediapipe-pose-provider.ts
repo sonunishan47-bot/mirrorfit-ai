@@ -10,7 +10,9 @@ import {
  * Official MediaPipe Pose Landmarker (lite, float16).
  *
  * WASM: copied from @mediapipe/tasks-vision into /mediapipe/wasm
- * Model: Google's documented GCS object, loaded at runtime, not committed.
+ * Model: vendored at build/dev into /mediapipe/models (see copy-mediapipe-wasm.mjs).
+ * The Google storage URL is the download source for that script only — the
+ * browser does not fetch GCS at runtime (offline / filtered Wi-Fi safe).
  *
  * Apache-2.0 runtime. Client-only. Frames never leave this process.
  *
@@ -18,10 +20,25 @@ import {
  * intended to share the main thread with the camera preview. A worker would
  * add transferable-frame complexity without a measured main-thread stall.
  */
-export const MEDIAPIPE_POSE_MODEL_URL =
+
+/** Same-origin path served from public/mediapipe/models after ensure script. */
+export const MEDIAPIPE_POSE_MODEL_PATH = '/mediapipe/models/pose_landmarker_lite.task';
+
+/**
+ * Official download URL used by `scripts/copy-mediapipe-wasm.mjs`.
+ * Kept here so privacy tests can assert we still pin Google's documented object
+ * and do not invent a third-party CDN.
+ */
+export const MEDIAPIPE_POSE_MODEL_DOWNLOAD_URL =
   'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 
+/** @deprecated Use MEDIAPIPE_POSE_MODEL_PATH — runtime no longer loads GCS. */
+export const MEDIAPIPE_POSE_MODEL_URL = MEDIAPIPE_POSE_MODEL_PATH;
+
 export const MEDIAPIPE_WASM_PATH = '/mediapipe/wasm';
+
+const LOCAL_MODEL_MISSING =
+  'Pose model missing under /mediapipe/models. Run pnpm --filter @mirrorfit/web dev (or build) so copy-mediapipe-wasm.mjs can install it.';
 
 type PoseLandmarkerLike = {
   detectForVideo(
@@ -64,11 +81,18 @@ export class MediaPipePoseProvider implements PoseProvider {
     }
 
     try {
+      const modelOk = await probeLocalPoseModel(MEDIAPIPE_POSE_MODEL_PATH);
+      if (epoch !== this.#epoch) return;
+      if (!modelOk) {
+        this.#fail(LOCAL_MODEL_MISSING);
+        return;
+      }
+
       const { FilesetResolver, PoseLandmarker } = await import('@mediapipe/tasks-vision');
       const fileset = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_PATH);
       const landmarker = (await PoseLandmarker.createFromOptions(fileset, {
         baseOptions: {
-          modelAssetPath: MEDIAPIPE_POSE_MODEL_URL,
+          modelAssetPath: MEDIAPIPE_POSE_MODEL_PATH,
         },
         runningMode: 'VIDEO',
         numPoses: 1,
@@ -171,9 +195,37 @@ export function firstPersonLandmarks(
     presence?: number;
   }>;
 }
+
+/** HEAD/GET probe so a missing model fails with an operator-facing message. */
+export async function probeLocalPoseModel(
+  path: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<boolean> {
+  try {
+    const head = await fetchFn(path, { method: 'HEAD', cache: 'no-store' });
+    if (head.ok) return true;
+    // Some static hosts omit HEAD — fall back to a ranged GET.
+    if (head.status === 405 || head.status === 501) {
+      const get = await fetchFn(path, {
+        method: 'GET',
+        headers: { Range: 'bytes=0-0' },
+        cache: 'no-store',
+      });
+      return get.ok || get.status === 206;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function reasonFrom(error: unknown): string {
   if (error instanceof Error && error.message) {
-    return error.message.slice(0, 200);
+    const message = error.message.slice(0, 200);
+    if (/404|failed to fetch|load.*model|Not Found/i.test(message)) {
+      return LOCAL_MODEL_MISSING;
+    }
+    return message;
   }
   return 'MediaPipe Pose Landmarker failed to initialize.';
 }

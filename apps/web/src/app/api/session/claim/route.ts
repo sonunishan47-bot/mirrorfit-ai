@@ -7,6 +7,7 @@ import {
 } from '@mirrorfit/validation';
 
 import { clientError } from '@/lib/api/errors';
+import { claimRateLimiter, clientIpFromRequest } from '@/lib/api/rate-limit';
 import { sha256Hex } from '@/lib/crypto/secrets';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin-client';
 
@@ -33,11 +34,15 @@ export const dynamic = 'force-dynamic';
  * attached to and the language to render in; it does not need the display,
  * shop or organization behind it, so none of those are disclosed.
  *
- * TODO (Phase 15): this is the strongest candidate in the system for a real
- * rate limit. Token entropy defeats guessing, but nothing here stops someone
- * making the endpoint expensive to serve.
+ * In-process IP rate limit (30/min) is a cost backstop. Phase 15 still needs
+ * a distributed limiter for multi-instance deploys.
  */
 export async function POST(request: Request): Promise<NextResponse> {
+  const limited = claimRateLimiter.check(clientIpFromRequest(request));
+  if (!limited.ok) {
+    return clientError('RATE_LIMITED', { retryAfterMs: limited.retryAfterMs });
+  }
+
   const parsed = await parseJsonBody(sessionClaimRequestSchema, request);
   // A malformed token and a wrong one are the same answer, so a caller
   // cannot use the shape of the rejection to learn what a real token looks

@@ -30,8 +30,15 @@ export async function ensureDevCerts(interfaces = networkInterfaces()) {
 
   const ca = await ensureCa();
   if (certsMatchHosts(hosts)) {
-    return { keyPath: KEY_PATH, certPath: CERT_PATH, caPath: CA_CERT_PATH, hosts };
+    return { keyPath: KEY_PATH, certPath: CERT_PATH, caPath: CA_CERT_PATH, hosts, regenerated: false };
   }
+
+  console.log(
+    `Dev HTTPS certificate SANs outdated or missing. Regenerating for: ${hosts.join(', ')}`,
+  );
+  console.log(
+    'Phone: if HTTPS fails after a Wi-Fi / hotspot IP change, reopen the new URL from the next line of the dev log (CA usually stays trusted).',
+  );
 
   const altNames = hosts.map((host) =>
     host === 'localhost' ? { type: 2, value: host } : { type: 7, ip: host },
@@ -53,7 +60,13 @@ export async function ensureDevCerts(interfaces = networkInterfaces()) {
   writeFileSync(CERT_PATH, pems.cert, { encoding: 'utf8' });
   writeFileSync(HOSTS_PATH, `${JSON.stringify(hosts, null, 2)}\n`, { encoding: 'utf8' });
 
-  return { keyPath: KEY_PATH, certPath: CERT_PATH, caPath: CA_CERT_PATH, hosts };
+  return {
+    keyPath: KEY_PATH,
+    certPath: CERT_PATH,
+    caPath: CA_CERT_PATH,
+    hosts,
+    regenerated: true,
+  };
 }
 
 async function ensureCa() {

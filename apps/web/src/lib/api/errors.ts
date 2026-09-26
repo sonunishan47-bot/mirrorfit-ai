@@ -19,6 +19,7 @@ export const CLIENT_ERROR_CODES = [
   'INVALID_CODE',
   'INVALID_TOKEN',
   'UNAUTHORIZED',
+  'RATE_LIMITED',
   'INTERNAL',
 ] as const;
 
@@ -29,12 +30,18 @@ const STATUS_BY_CODE: Readonly<Record<ClientErrorCode, number>> = {
   INVALID_CODE: 400,
   INVALID_TOKEN: 400,
   UNAUTHORIZED: 401,
+  RATE_LIMITED: 429,
   INTERNAL: 500,
 };
 
-export function clientError(code: ClientErrorCode): NextResponse {
-  return NextResponse.json(
-    { error: code },
-    { status: STATUS_BY_CODE[code], headers: { 'Cache-Control': 'no-store' } },
-  );
+export function clientError(
+  code: ClientErrorCode,
+  options?: { readonly retryAfterMs?: number },
+): NextResponse {
+  const headers: Record<string, string> = { 'Cache-Control': 'no-store' };
+  if (code === 'RATE_LIMITED' && options?.retryAfterMs !== undefined) {
+    const seconds = Math.max(1, Math.ceil(options.retryAfterMs / 1000));
+    headers['Retry-After'] = String(seconds);
+  }
+  return NextResponse.json({ error: code }, { status: STATUS_BY_CODE[code], headers });
 }

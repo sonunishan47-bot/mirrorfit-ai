@@ -8,6 +8,7 @@ import {
 } from '@mirrorfit/validation';
 
 import { clientError } from '@/lib/api/errors';
+import { clientIpFromRequest, enrollRateLimiter } from '@/lib/api/rate-limit';
 import { recordDeviceAction } from '@/lib/audit';
 import { generateDeviceSecret, sha256Hex } from '@/lib/crypto/secrets';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin-client';
@@ -27,11 +28,14 @@ export const dynamic = 'force-dynamic';
  * — not in a log, not in a later response, not in a column. A mirror that
  * loses it must be re-enrolled, which is the correct trade.
  *
- * TODO (Phase 15): add distributed rate limiting by source address. The
- * entropy and lifetime of a code defeat guessing, but they do nothing about
- * someone making this endpoint expensive to serve.
+ * In-process IP rate limit (10/min). Phase 15: distributed limiter.
  */
 export async function POST(request: Request): Promise<NextResponse> {
+  const limited = enrollRateLimiter.check(clientIpFromRequest(request));
+  if (!limited.ok) {
+    return clientError('RATE_LIMITED', { retryAfterMs: limited.retryAfterMs });
+  }
+
   const parsed = await parseJsonBody(deviceEnrollRequestSchema, request);
   if (!parsed.ok) {
     return clientError('INVALID_REQUEST');

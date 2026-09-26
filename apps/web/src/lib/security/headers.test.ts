@@ -18,8 +18,9 @@ describe('security headers', () => {
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
     expect(csp).toContain(`img-src 'self' data: blob: ${SUPABASE}`);
     expect(csp).toContain(
-      `connect-src 'self' ${SUPABASE} wss://ptqqmlsdsgkpqygdsupq.supabase.co https://storage.googleapis.com`,
+      `connect-src 'self' ${SUPABASE} wss://ptqqmlsdsgkpqygdsupq.supabase.co`,
     );
+    expect(csp).not.toContain('storage.googleapis.com');
     expect(csp).toContain("worker-src 'self' blob:");
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).toContain('upgrade-insecure-requests');

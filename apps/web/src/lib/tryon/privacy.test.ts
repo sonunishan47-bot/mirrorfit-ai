@@ -19,7 +19,7 @@ describe('Phase 5 privacy invariants', () => {
     expect(combined).not.toMatch(/NEXT_PUBLIC_SUPABASE_SECRET/);
     expect(combined).not.toMatch(/console\.(log|debug|info)\(.*landmark|console\.(log|debug|info)\(.*frame/i);
     expect(pose).toContain('detectForVideo');
-    expect(pose).toContain('MEDIAPIPE_POSE_MODEL_URL');
+    expect(pose).toContain('MEDIAPIPE_POSE_MODEL_PATH');
   });
 
   it('does not expose device secrets or storage paths on phone catalog surfaces', () => {
@@ -32,12 +32,16 @@ describe('Phase 5 privacy invariants', () => {
     expect(combined).not.toMatch(/garment-overlay|overlay_url/);
   });
 
-  it('keeps the official model URL on Google storage and local WASM', () => {
+  it('loads the pose model same-origin and pins Google storage only as the download source', () => {
     const pose = source('lib/tryon/mediapipe-pose-provider.ts');
+    expect(pose).toContain("'/mediapipe/models/pose_landmarker_lite.task'");
     expect(pose).toContain(
       'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
     );
+    expect(pose).toContain('MEDIAPIPE_POSE_MODEL_DOWNLOAD_URL');
     expect(pose).toContain('/mediapipe/wasm');
     expect(pose).not.toContain('cdn.jsdelivr.net');
+    // Runtime createFromOptions must not point at GCS.
+    expect(pose).toMatch(/modelAssetPath:\s*MEDIAPIPE_POSE_MODEL_PATH/);
   });
 });
