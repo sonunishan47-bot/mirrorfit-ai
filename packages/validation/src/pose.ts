@@ -63,6 +63,7 @@ export const customerCatalogItemSchema = z.object({
   sizes: z.array(z.string().trim().min(1).max(8)).max(12),
   is_test_fixture: z.boolean(),
   has_thumbnail: z.boolean(),
+  has_overlay: z.boolean(),
   fitting_available: z.boolean(),
 });
 

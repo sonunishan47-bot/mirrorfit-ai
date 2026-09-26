@@ -105,7 +105,8 @@ export interface DepthProvider extends Disposable {
 
 export interface FittingInput {
   readonly pose: PoseFrame;
-  readonly geometry: BodyGeometry;
+  /** Torso geometry for TOP. May be null for LOWER_BODY (hip/ankle derived inside the engine). */
+  readonly geometry: BodyGeometry | null;
   readonly segmentation: SegmentationMask | null;
   readonly depth: DepthMap | null;
 }

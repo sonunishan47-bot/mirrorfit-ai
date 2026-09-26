@@ -4,4 +4,5 @@ export * from './parse';
 export * from './devices';
 export * from './sessions';
 export * from './pose';
+export * from './garment-overlay';
 export { z } from 'zod';

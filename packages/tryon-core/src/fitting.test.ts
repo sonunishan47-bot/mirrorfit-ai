@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { deriveBodyGeometry } from './body-geometry';
 import type { PoseFrame } from './geometry';
 import {
+  DEFAULT_HIP_WIDTH_BLEND,
   LandmarkFittingEngine,
   TOP_HEIGHT_FACTOR,
   TOP_VERTICAL_OFFSET,
   TOP_WIDTH_FACTOR,
+  yawScaleCompression,
 } from './landmark-fitting-engine';
 import { UnavailablePoseProvider } from './unavailable-pose-provider';
 import { UnavailableSegmentationProvider } from './unavailable-segmentation';
@@ -62,7 +64,10 @@ describe('landmark fitting', () => {
     expect(geometry?.shoulderCenter.y).toBeCloseTo(0.3);
     expect(fit?.transform.translate.x).toBeCloseTo(0.5);
     expect(fit?.transform.translate.y).toBeCloseTo(0.3 + 0.3 * TOP_VERTICAL_OFFSET);
-    expect(fit?.transform.scaleX).toBeCloseTo(0.3 * TOP_WIDTH_FACTOR);
+    const blendedWidth =
+      geometry!.shoulderWidth * (1 - DEFAULT_HIP_WIDTH_BLEND) +
+      geometry!.hipWidth * DEFAULT_HIP_WIDTH_BLEND;
+    expect(fit?.transform.scaleX).toBeCloseTo(blendedWidth * TOP_WIDTH_FACTOR);
     expect(fit?.transform.scaleY).toBeCloseTo(0.3 * TOP_HEIGHT_FACTOR);
     expect(fit?.transform.rotation).toBeCloseTo(0);
     await engine.dispose();
@@ -138,6 +143,65 @@ describe('landmark fitting', () => {
     expect(leftFit!.transform.translate.x).toBeLessThan(rightFit!.transform.translate.x);
     expect(leftFit!.transform.scaleX).toBeGreaterThan(rightFit!.transform.scaleX);
     expect(leftFit!.transform.scaleY).toBeGreaterThan(rightFit!.transform.scaleY);
+    await engine.dispose();
+  });
+
+  it('anchors commercial tops on the shoulder line without inventing a pose', async () => {
+    const engine = new LandmarkFittingEngine();
+    engine.setAnchorMode('shoulders');
+    await engine.loadGarment('g1', 'v1', 'Tops');
+    const geometry = deriveBodyGeometry(TEST_FIXTURE_POSE)!;
+    const fit = await engine.fit({
+      pose: TEST_FIXTURE_POSE,
+      geometry,
+      segmentation: null,
+      depth: null,
+    });
+    expect(fit?.transform.translate.x).toBeCloseTo(geometry.shoulderCenter.x);
+    expect(fit?.transform.translate.y).toBeCloseTo(geometry.shoulderCenter.y);
+    expect(fit?.transform.translate.y).toBeLessThan(
+      geometry.shoulderCenter.y + geometry.torsoHeight * TOP_VERTICAL_OFFSET,
+    );
+    await engine.dispose();
+  });
+
+  it('shrinks scaleX from real shoulder yaw without inventing a side view', async () => {
+    const engine = new LandmarkFittingEngine();
+    engine.setAnchorMode('shoulders');
+    engine.setHipWidthBlend(0);
+    await engine.loadGarment('g1', 'v1', 'Jacket');
+    const frontGeo = deriveBodyGeometry(TEST_FIXTURE_POSE)!;
+    const frontFit = await engine.fit({
+      pose: TEST_FIXTURE_POSE,
+      geometry: frontGeo,
+      segmentation: null,
+      depth: null,
+    });
+    engine.clearGarment();
+    await engine.loadGarment('g1', 'v1', 'Jacket');
+    engine.setAnchorMode('shoulders');
+    engine.setHipWidthBlend(0);
+    const turned: PoseFrame = {
+      timestampMs: 9,
+      confidence: 0.9,
+      keypoints: [
+        { name: 'LEFT_SHOULDER', x: 0.35, y: 0.3, z: 0.25, confidence: 0.9 },
+        { name: 'RIGHT_SHOULDER', x: 0.65, y: 0.3, z: -0.25, confidence: 0.9 },
+        { name: 'LEFT_HIP', x: 0.4, y: 0.6, z: null, confidence: 0.85 },
+        { name: 'RIGHT_HIP', x: 0.6, y: 0.6, z: null, confidence: 0.85 },
+      ],
+    };
+    const turnedGeo = deriveBodyGeometry(turned)!;
+    expect(Math.abs(turnedGeo.yaw)).toBeGreaterThan(Math.abs(frontGeo.yaw));
+    const turnedFit = await engine.fit({
+      pose: turned,
+      geometry: turnedGeo,
+      segmentation: null,
+      depth: null,
+    });
+    expect(turnedFit!.transform.scaleX).toBeLessThan(frontFit!.transform.scaleX);
+    expect(yawScaleCompression(turnedGeo.yaw)).toBeLessThan(1);
+    expect(turnedFit!.transform.translate.y).toBeCloseTo(turnedGeo.shoulderCenter.y);
     await engine.dispose();
   });
 
@@ -266,7 +330,37 @@ describe('landmark fitting', () => {
     ).toBeNull();
   });
 
-  it('does not invent a fit for lower-body categories', async () => {
+  it('fits lower-body categories from hip and ankle landmarks', async () => {
+    const engine = new LandmarkFittingEngine();
+    engine.setAnchorMode('hips');
+    await engine.loadGarment('g1', 'v1', 'Jeans');
+    const lowerPose: PoseFrame = {
+      timestampMs: 42,
+      confidence: 0.85,
+      keypoints: [
+        { name: 'LEFT_HIP', x: 0.4, y: 0.55, z: null, confidence: 0.9 },
+        { name: 'RIGHT_HIP', x: 0.6, y: 0.55, z: null, confidence: 0.9 },
+        { name: 'LEFT_KNEE', x: 0.42, y: 0.72, z: null, confidence: 0.85 },
+        { name: 'RIGHT_KNEE', x: 0.58, y: 0.72, z: null, confidence: 0.85 },
+        { name: 'LEFT_ANKLE', x: 0.43, y: 0.9, z: null, confidence: 0.8 },
+        { name: 'RIGHT_ANKLE', x: 0.57, y: 0.9, z: null, confidence: 0.8 },
+      ],
+    };
+    const fit = await engine.fit({
+      pose: lowerPose,
+      geometry: null,
+      segmentation: null,
+      depth: null,
+    });
+    expect(fit).not.toBeNull();
+    expect(engine.lastStatus).toBe('ready');
+    expect(fit!.transform.translate.x).toBeCloseTo(0.5);
+    expect(fit!.transform.translate.y).toBeCloseTo(0.55);
+    expect(fit!.transform.scaleX).toBeGreaterThan(0);
+    expect(fit!.transform.scaleY).toBeGreaterThan(0);
+  });
+
+  it('returns not_ready for lower-body when ankles and knees are missing', async () => {
     const engine = new LandmarkFittingEngine();
     await engine.loadGarment('g1', 'v1', 'Jeans');
     const geometry = deriveBodyGeometry(TEST_FIXTURE_POSE);
@@ -277,7 +371,7 @@ describe('landmark fitting', () => {
       depth: null,
     });
     expect(fit).toBeNull();
-    expect(engine.lastStatus).toBe('lower_body_not_implemented');
+    expect(engine.lastStatus).toBe('not_ready');
   });
 
   it('does not invent a fit when overall pose confidence is too low', async () => {
@@ -293,5 +387,41 @@ describe('landmark fitting', () => {
     });
     expect(fit).toBeNull();
     expect(engine.lastStatus).toBe('not_ready');
+  });
+
+  it('EMA-smooths successive fits so a jump is damped without inventing pose', async () => {
+    const engine = new LandmarkFittingEngine();
+    engine.setAnchorMode('shoulders');
+    await engine.loadGarment('g1', 'v1', 'Tops');
+    const firstGeo = deriveBodyGeometry(TEST_FIXTURE_POSE)!;
+    const first = await engine.fit({
+      pose: TEST_FIXTURE_POSE,
+      geometry: firstGeo,
+      segmentation: null,
+      depth: null,
+    });
+    const jumped: PoseFrame = {
+      timestampMs: 50,
+      confidence: 0.9,
+      keypoints: [
+        { name: 'LEFT_SHOULDER', x: 0.55, y: 0.3, z: null, confidence: 0.9 },
+        { name: 'RIGHT_SHOULDER', x: 0.85, y: 0.3, z: null, confidence: 0.9 },
+        { name: 'LEFT_HIP', x: 0.6, y: 0.6, z: null, confidence: 0.85 },
+        { name: 'RIGHT_HIP', x: 0.8, y: 0.6, z: null, confidence: 0.85 },
+      ],
+    };
+    const jumpedGeo = deriveBodyGeometry(jumped)!;
+    const second = await engine.fit({
+      pose: jumped,
+      geometry: jumpedGeo,
+      segmentation: null,
+      depth: null,
+    });
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    // Smoothed x sits strictly between the previous sample and the raw jump target.
+    expect(second!.transform.translate.x).toBeGreaterThan(first!.transform.translate.x);
+    expect(second!.transform.translate.x).toBeLessThan(jumpedGeo.shoulderCenter.x);
+    await engine.dispose();
   });
 });

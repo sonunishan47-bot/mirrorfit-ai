@@ -1,21 +1,24 @@
 import type { GarmentFitCategory } from '@mirrorfit/types';
 
-export type OverlaySourceKind = 'test_fixture' | 'none';
+export type OverlaySourceKind = 'test_fixture' | 'catalog_overlay' | 'none';
 
 /**
  * Decides what the overlay canvas may draw.
  *
- * Commercial overlay bytes are not loaded: storage paths stay off the
- * kiosk. The labelled test-fixture shirt is the only drawable source.
- * A real product without an overlay asset gets nothing, not a stand-in.
+ * - Test fixtures use the labelled in-browser geometric shirt/pants.
+ * - Commercial TOP / LOWER_BODY draw only when an OVERLAY asset was resolved
+ *   and loaded.
+ * - Missing assets stay `none` — never a stand-in product image.
  */
 export function overlaySourceForSelection(input: {
   readonly selected: boolean;
   readonly isTestFixture: boolean;
   readonly fitCategory: GarmentFitCategory | null;
+  readonly hasOverlayAsset?: boolean;
 }): OverlaySourceKind {
   if (!input.selected) return 'none';
-  if (input.fitCategory !== 'TOP') return 'none';
-  if (!input.isTestFixture) return 'none';
-  return 'test_fixture';
+  if (input.fitCategory !== 'TOP' && input.fitCategory !== 'LOWER_BODY') return 'none';
+  if (input.isTestFixture) return 'test_fixture';
+  if (input.hasOverlayAsset === true) return 'catalog_overlay';
+  return 'none';
 }

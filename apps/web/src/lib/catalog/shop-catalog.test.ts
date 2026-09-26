@@ -57,6 +57,7 @@ describe('catalog tenant isolation', () => {
     expect(items[0]?.name).toBe('Shop A tee');
     expect(items[0]?.is_test_fixture).toBe(false);
     expect(items[0]?.has_thumbnail).toBe(false);
+    expect(items[0]?.has_overlay).toBe(false);
     expect(items[0]?.fitting_available).toBe(true);
     expect(items[0]?.brand).toBe('Test');
     expect(items[0]?.sizes).toEqual([]);
@@ -94,11 +95,33 @@ describe('catalog tenant isolation', () => {
     expect(items[0]?.is_test_fixture).toBe(true);
     expect(items[0]?.sizes).toEqual(['S', 'M', 'L']);
     expect(items[0]?.has_thumbnail).toBe(false);
+    expect(items[0]?.has_overlay).toBe(true);
     expect(items[0]?.fitting_available).toBe(true);
     expect(items[0]?.audience).toBeNull();
   });
 
-  it('marks lower-body categories as not fitting-available', () => {
+  it('marks commercial garments with OVERLAY presence without exposing storage paths', () => {
+    const items = filterCatalogForShop(
+      [garment(GARMENT_A, ORG_A, SHOP_A, 'Shop tee')],
+      [
+        {
+          id: VARIANT_A,
+          garment_id: GARMENT_A,
+          organization_id: ORG_A,
+          shop_id: SHOP_A,
+          color_name: 'Black',
+          is_active: true,
+        },
+      ],
+      { organizationId: ORG_A, shopId: SHOP_A },
+      { overlayGarmentIds: new Set([GARMENT_A]) },
+    );
+    expect(items[0]?.has_overlay).toBe(true);
+    expect(JSON.stringify(items[0])).not.toContain('storage_path');
+    expect(JSON.stringify(items[0])).not.toContain('overlay_url');
+  });
+
+  it('marks lower-body categories as fitting-available', () => {
     const items = filterCatalogForShop(
       [{ ...garment(GARMENT_A, ORG_A, SHOP_A, 'Shop jeans'), category: 'Jeans' }],
       [
@@ -113,7 +136,7 @@ describe('catalog tenant isolation', () => {
       ],
       { organizationId: ORG_A, shopId: SHOP_A },
     );
-    expect(items[0]?.fitting_available).toBe(false);
+    expect(items[0]?.fitting_available).toBe(true);
   });
 
   it('rejects a row that claims another organization', () => {
@@ -167,5 +190,32 @@ describe('catalog tenant isolation', () => {
     const json = JSON.stringify(items);
     expect(json).not.toMatch(/organization_id|shop_id|storage_path|storage_bucket|content_hash/);
     expect(items[0]?.has_thumbnail).toBe(true);
+  });
+
+  it('publishes every active color variant for a shop garment', () => {
+    const items = filterCatalogForShop(
+      [garment(GARMENT_A, ORG_A, SHOP_A, 'Shop tee')],
+      [
+        {
+          id: VARIANT_A,
+          garment_id: GARMENT_A,
+          organization_id: ORG_A,
+          shop_id: SHOP_A,
+          color_name: 'Black',
+          is_active: true,
+        },
+        {
+          id: VARIANT_B,
+          garment_id: GARMENT_A,
+          organization_id: ORG_A,
+          shop_id: SHOP_A,
+          color_name: 'Red',
+          is_active: true,
+        },
+      ],
+      { organizationId: ORG_A, shopId: SHOP_A },
+    );
+    expect(items).toHaveLength(2);
+    expect(items.map((row) => row?.color_name)).toEqual(['Black', 'Red']);
   });
 });

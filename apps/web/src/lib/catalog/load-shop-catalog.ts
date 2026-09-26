@@ -17,7 +17,7 @@ import {
  */
 export async function loadShopCatalog(scope: TenantScope) {
   const supabase = createSupabaseAdminClient();
-  const [garments, variants, charts, measurements, thumbnails] = await Promise.all([
+  const [garments, variants, charts, measurements, thumbnails, overlays] = await Promise.all([
     supabase
       .from('garments')
       .select('id, organization_id, shop_id, name, category, brand, price_minor, currency_code, is_active')
@@ -46,9 +46,21 @@ export async function loadShopCatalog(scope: TenantScope) {
       .select('garment_id, organization_id, kind')
       .eq('organization_id', scope.organizationId)
       .eq('kind', 'THUMBNAIL'),
+    supabase
+      .from('garment_assets')
+      .select('garment_id, organization_id, kind')
+      .eq('organization_id', scope.organizationId)
+      .eq('kind', 'OVERLAY'),
   ]);
 
-  if (garments.error || variants.error || charts.error || measurements.error || thumbnails.error) {
+  if (
+    garments.error ||
+    variants.error ||
+    charts.error ||
+    measurements.error ||
+    thumbnails.error ||
+    overlays.error
+  ) {
     return null;
   }
 
@@ -60,6 +72,7 @@ export async function loadShopCatalog(scope: TenantScope) {
     charts.data ?? [],
     measurements.data ?? [],
     thumbnails.data ?? [],
+    overlays.data ?? [],
     shopGarmentIds,
   );
   return filterCatalogForShop(garments.data ?? [], variants.data ?? [], scope, extras);
@@ -80,6 +93,7 @@ function extrasForShop(
     shop_id: string;
   }[],
   thumbnails: readonly { garment_id: string; organization_id: string; kind: string }[],
+  overlays: readonly { garment_id: string; organization_id: string; kind: string }[],
   shopGarmentIds: ReadonlySet<string>,
 ): CatalogExtras {
   const chartById = new Map<string, string>();
@@ -106,5 +120,12 @@ function extrasForShop(
     thumbnailGarmentIds.add(row.garment_id);
   }
 
-  return { sizesByGarmentId, thumbnailGarmentIds };
+  const overlayGarmentIds = new Set<string>();
+  for (const row of overlays) {
+    if (row.organization_id !== scope.organizationId) continue;
+    if (!shopGarmentIds.has(row.garment_id)) continue;
+    overlayGarmentIds.add(row.garment_id);
+  }
+
+  return { sizesByGarmentId, thumbnailGarmentIds, overlayGarmentIds };
 }

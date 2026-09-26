@@ -18,6 +18,8 @@ export interface CatalogVariantRow {
 export interface CatalogExtras {
   readonly sizesByGarmentId?: Readonly<Record<string, readonly string[]>>;
   readonly thumbnailGarmentIds?: ReadonlySet<string>;
+  /** Garment ids with a drawable OVERLAY asset (presence only — no storage paths). */
+  readonly overlayGarmentIds?: ReadonlySet<string>;
 }
 
 /**
@@ -63,12 +65,19 @@ export function projectCustomerCatalogItem(
     sizes: [...(extras.sizesByGarmentId?.[parsedGarment.data.id] ?? [])],
     is_test_fixture: isTestFixtureCatalogName(parsedGarment.data.name),
     has_thumbnail: extras.thumbnailGarmentIds?.has(parsedGarment.data.id) === true,
-    fitting_available: resolveFitCategory(parsedGarment.data.category) === 'TOP',
+    has_overlay:
+      isTestFixtureCatalogName(parsedGarment.data.name) ||
+      extras.overlayGarmentIds?.has(parsedGarment.data.id) === true,
+    fitting_available: resolveFitCategory(parsedGarment.data.category) !== null,
   };
   const published = customerCatalogItemSchema.safeParse(item);
   return published.success ? published.data : null;
 }
 
+/**
+ * Publishes one customer-facing row per active shop-scoped color variant.
+ * Inactive variants and other-tenant rows are dropped — never invented.
+ */
 export function filterCatalogForShop(
   garments: readonly unknown[],
   variants: readonly CatalogVariantRow[],
@@ -79,12 +88,13 @@ export function filterCatalogForShop(
   for (const garment of garments) {
     const parsed = catalogGarmentRowSchema.safeParse(garment);
     if (!parsed.success || !belongsToShop(parsed.data, scope)) continue;
-    const variant = variants.find(
+    const shopVariants = variants.filter(
       (row) => row.garment_id === parsed.data.id && belongsToShop(row, scope) && row.is_active,
     );
-    if (!variant) continue;
-    const item = projectCustomerCatalogItem(parsed.data, variant, extras);
-    if (item) items.push(item);
+    for (const variant of shopVariants) {
+      const item = projectCustomerCatalogItem(parsed.data, variant, extras);
+      if (item) items.push(item);
+    }
   }
   return items;
 }
