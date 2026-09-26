@@ -25,6 +25,8 @@ export class CameraFramePipeline {
   #handle = 0;
   #lastStartMs = 0;
   #droppedWhileBusy = 0;
+  /** Soft ceiling so a week-long kiosk session cannot grow the counter without bound. */
+  static readonly MAX_DROPPED_REPORT = 1_000_000;
 
   constructor(ports: FramePipelinePorts, maxFps = 8) {
     if (!Number.isFinite(maxFps) || maxFps <= 0 || maxFps > 60) {
@@ -82,7 +84,9 @@ export class CameraFramePipeline {
     const now = this.#ports.now();
     const due = now - this.#lastStartMs >= this.#minIntervalMs;
     if (due && this.#inFlight) {
-      this.#droppedWhileBusy += 1;
+      if (this.#droppedWhileBusy < CameraFramePipeline.MAX_DROPPED_REPORT) {
+        this.#droppedWhileBusy += 1;
+      }
     } else if (due && !this.#inFlight) {
       const frame = this.#ports.readFrame();
       if (frame) {

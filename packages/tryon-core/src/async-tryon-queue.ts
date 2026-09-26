@@ -3,7 +3,8 @@
  *
  * Drops superseded requests so a slow AI callback cannot overwrite a newer
  * garment selection. Timeouts resolve to null so the kiosk keeps the geometric
- * overlay without freezing.
+ * overlay without freezing. Timers are cleared on cancel to avoid long-session
+ * timer accumulation.
  */
 
 export type AsyncTryOnTask<T> = (signal: { readonly cancelled: boolean }) => Promise<T | null>;
@@ -18,6 +19,7 @@ export class AsyncTryOnQueue {
   #generation = 0;
   #busy = false;
   #pending: PendingSlot | null = null;
+  #timeoutHandle: ReturnType<typeof setTimeout> | null = null;
   readonly #timeoutMs: number;
 
   constructor(timeoutMs = 2_500) {
@@ -55,6 +57,7 @@ export class AsyncTryOnQueue {
   /** Invalidate all in-flight and pending work (dispose / garment clear). */
   cancel(): void {
     this.#generation += 1;
+    this.#clearTimeout();
     if (this.#pending) {
       this.#pending.resolve(null);
       this.#pending = null;
@@ -72,7 +75,7 @@ export class AsyncTryOnQueue {
     try {
       const result = await Promise.race([
         next.run(token),
-        sleep(this.#timeoutMs).then(() => null),
+        this.#timeout(this.#timeoutMs).then(() => null),
       ]);
       if (watch !== this.#generation) {
         token.cancelled = true;
@@ -83,16 +86,28 @@ export class AsyncTryOnQueue {
     } catch {
       next.resolve(null);
     } finally {
+      this.#clearTimeout();
       this.#busy = false;
       if (this.#pending) {
         void this.#pump();
       }
     }
   }
-}
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+  #timeout(ms: number): Promise<void> {
+    this.#clearTimeout();
+    return new Promise((resolve) => {
+      this.#timeoutHandle = setTimeout(() => {
+        this.#timeoutHandle = null;
+        resolve();
+      }, ms);
+    });
+  }
+
+  #clearTimeout(): void {
+    if (this.#timeoutHandle !== null) {
+      clearTimeout(this.#timeoutHandle);
+      this.#timeoutHandle = null;
+    }
+  }
 }

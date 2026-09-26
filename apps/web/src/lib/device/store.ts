@@ -2,12 +2,20 @@
  * Local persistence of the enrolled device credential.
  *
  * The secret is minted by `/api/device/enroll` and stored only in this
- * browser. It is never inlined into a bundle, never written into a QR, and
- * never logged. A missing or corrupt record is treated as "not enrolled":
- * the kiosk must not invent a credential to keep the attract screen pretty.
+ * browser under a single, namespaced key. It is never inlined into a bundle,
+ * never written into a QR, and never logged. A missing, corrupt, or
+ * inaccessible store is treated as "not enrolled": the kiosk must not invent
+ * a credential to keep the attract screen pretty.
  */
 
-export const DEVICE_STORAGE_KEY = 'mirrorfit.kiosk.device';
+/** Sole localStorage key for the enrolled kiosk credential. Do not reuse. */
+export const DEVICE_STORAGE_KEY = 'mirrorfit.kiosk.device.v1';
+
+/**
+ * Legacy key from earlier builds. Migrated once into DEVICE_STORAGE_KEY then removed.
+ * Kept only so upgrades do not force re-enrollment.
+ */
+export const DEVICE_STORAGE_KEY_LEGACY = 'mirrorfit.kiosk.device';
 
 export interface StoredDeviceCredential {
   readonly deviceSecret: string;
@@ -21,15 +29,55 @@ export interface KeyValueStore {
   removeItem(key: string): void;
 }
 
+export type DeviceStorageFailureReason = 'unavailable' | 'invalid' | 'quota' | 'restricted';
+
+export type SaveDeviceCredentialResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: DeviceStorageFailureReason };
+
 const DEVICE_SECRET = /^[A-Za-z0-9_-]{43}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function browserStore(): KeyValueStore | null {
   if (typeof window === 'undefined') return null;
   try {
-    return window.localStorage;
+    const storage = window.localStorage;
+    // Probe accessibility (private mode / blocked storage can throw on use).
+    const probeKey = `${DEVICE_STORAGE_KEY}.__probe`;
+    storage.setItem(probeKey, '1');
+    storage.removeItem(probeKey);
+    return storage;
   } catch {
     return null;
+  }
+}
+
+function safeGetItem(store: KeyValueStore, key: string): string | null {
+  try {
+    return store.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetItem(store: KeyValueStore, key: string, value: string): DeviceStorageFailureReason | null {
+  try {
+    store.setItem(key, value);
+    return null;
+  } catch (error) {
+    const name = error instanceof DOMException ? error.name : '';
+    if (name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+      return 'quota';
+    }
+    return 'restricted';
+  }
+}
+
+function safeRemoveItem(store: KeyValueStore, key: string): void {
+  try {
+    store.removeItem(key);
+  } catch {
+    // Best-effort clear.
   }
 }
 
@@ -67,33 +115,71 @@ function parseRecord(raw: string): StoredDeviceCredential | null {
   };
 }
 
+/**
+ * Redacts a device secret from telemetry / console strings.
+ * Never use the raw secret in logs.
+ */
+export function redactDeviceSecret(text: string, secret: string | null | undefined): string {
+  if (!secret || secret.length < 8) return text;
+  return text.split(secret).join('[device-secret-redacted]');
+}
+
 export function loadDeviceCredential(
   store: KeyValueStore | null = browserStore(),
 ): StoredDeviceCredential | null {
   if (!store) return null;
-  const raw = store.getItem(DEVICE_STORAGE_KEY);
-  if (raw === null) return null;
-  const parsed = parseRecord(raw);
-  if (!parsed) {
-    store.removeItem(DEVICE_STORAGE_KEY);
-    return null;
+
+  const current = safeGetItem(store, DEVICE_STORAGE_KEY);
+  if (current !== null) {
+    const parsed = parseRecord(current);
+    if (!parsed) {
+      safeRemoveItem(store, DEVICE_STORAGE_KEY);
+      return null;
+    }
+    return parsed;
   }
-  return parsed;
+
+  // One-time migration from the legacy key.
+  const legacy = safeGetItem(store, DEVICE_STORAGE_KEY_LEGACY);
+  if (legacy === null) return null;
+  const parsedLegacy = parseRecord(legacy);
+  safeRemoveItem(store, DEVICE_STORAGE_KEY_LEGACY);
+  if (!parsedLegacy) return null;
+  const writeError = safeSetItem(store, DEVICE_STORAGE_KEY, JSON.stringify(parsedLegacy));
+  if (writeError) return parsedLegacy;
+  return parsedLegacy;
 }
 
+/**
+ * Persists a validated credential. Returns a structured result so callers can
+ * show a clear message when storage is blocked — never invents a secret.
+ */
 export function saveDeviceCredential(
   credential: StoredDeviceCredential,
   store: KeyValueStore | null = browserStore(),
-): void {
+): SaveDeviceCredentialResult {
   if (!store) {
-    throw new Error('Device storage is not available');
+    return { ok: false, reason: 'unavailable' };
   }
   if (!DEVICE_SECRET.test(credential.deviceSecret) || !UUID.test(credential.displayId)) {
-    throw new Error('Refusing to persist an ill-formed device credential');
+    return { ok: false, reason: 'invalid' };
   }
-  store.setItem(DEVICE_STORAGE_KEY, JSON.stringify(credential));
+  const payload = JSON.stringify({
+    deviceSecret: credential.deviceSecret,
+    displayId: credential.displayId,
+    displayName: credential.displayName,
+  });
+  const writeError = safeSetItem(store, DEVICE_STORAGE_KEY, payload);
+  if (writeError) {
+    return { ok: false, reason: writeError };
+  }
+  // Avoid leaving a stale legacy copy that could diverge.
+  safeRemoveItem(store, DEVICE_STORAGE_KEY_LEGACY);
+  return { ok: true };
 }
 
 export function clearDeviceCredential(store: KeyValueStore | null = browserStore()): void {
-  store?.removeItem(DEVICE_STORAGE_KEY);
+  if (!store) return;
+  safeRemoveItem(store, DEVICE_STORAGE_KEY);
+  safeRemoveItem(store, DEVICE_STORAGE_KEY_LEGACY);
 }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { FrameRateCounter, resolveFitCategory } from '@mirrorfit/tryon-core';
 
+import { ClientErrorBoundary } from '@/components/client-error-boundary';
 import { BrowserCameraProvider } from '@/lib/camera/browser-camera';
 import { startHeartbeatLoop } from '@/lib/device/heartbeat-loop';
 import {
@@ -16,6 +17,13 @@ import { noteCameraFrame } from '@/lib/kiosk/fps';
 import { KioskAnalyticsBuffer } from '@/lib/kiosk/kiosk-analytics';
 import { presentKiosk, reduceKiosk, type KioskStatus } from '@/lib/kiosk/machine';
 import { pairingQrValue } from '@/lib/kiosk/pairing-qr';
+import {
+  createPollResilienceState,
+  notePollFailure,
+  notePollSuccess,
+  shouldForcePollOnReconnect,
+  type PollResilienceState,
+} from '@/lib/kiosk/poll-resilience';
 import {
   DEFAULT_POWER_SAVE_IDLE_MS,
   evaluatePowerSave,
@@ -66,10 +74,12 @@ export function KioskShell() {
   const statusRef = useRef<KioskStatus>('IDLE');
   const lifecycleRef = useRef(createSessionLifecycle());
   const analyticsRef = useRef(new KioskAnalyticsBuffer());
+  const pollResilienceRef = useRef<PollResilienceState>(createPollResilienceState());
   const lastActivityRef = useRef(Date.now());
   const powerPhaseRef = useRef<PowerSavePhase>('awake');
   const prevGarmentKeyRef = useRef<string>('');
   const prevStatusRef = useRef<KioskStatus>('IDLE');
+  const [pollHealth, setPollHealth] = useState<'ok' | 'degraded'>('ok');
 
   const [device, setDevice] = useState<StoredDeviceCredential | null>(null);
   const [status, setStatus] = useState<KioskStatus>('IDLE');
@@ -287,57 +297,85 @@ export function KioskShell() {
     if (!device) return;
     if (status === 'IDLE' || status === 'ENDED') return;
 
-    const poll = window.setInterval(() => {
-      void (async () => {
-        const life = lifecycleRef.current;
-        const { generation, sessionId } = life.beginPoll();
-        if (!sessionId) return;
-        try {
-          const live = await readLiveSession(device.deviceSecret);
-          const applied = life.applyPoll(generation, live, Date.now());
-          if (applied.kind === 'stale') return;
+    let cancelled = false;
 
-          if (applied.live?.selectedGarment !== undefined) {
-            const next = applied.live.selectedGarment;
-            setSelectedGarment((current) => {
-              if (!next && !current) return current;
-              if (
-                current?.garmentId === next?.garmentId &&
-                current?.variantId === next?.variantId &&
-                current?.category === next?.category &&
-                current?.isTestFixture === next?.isTestFixture
-              ) {
-                return current;
-              }
-              return next ?? null;
-            });
-          }
+    const runPoll = async (): Promise<void> => {
+      if (cancelled) return;
+      const life = lifecycleRef.current;
+      const { generation, sessionId } = life.beginPoll();
+      if (!sessionId) return;
+      try {
+        const live = await readLiveSession(device.deviceSecret);
+        if (cancelled) return;
+        const applied = life.applyPoll(generation, live, Date.now());
+        if (applied.kind === 'stale') return;
 
-          const event = applied.event;
-          if (event === 'PAIRING_CLAIMED' && statusRef.current === 'WAITING') {
-            noteActivity(true);
-            setPairingUrl(null);
-            setStatus((current) => reduceKiosk(current, 'PAIRING_CLAIMED'));
-            if (applied.live?.status === 'ACTIVE') {
-              setStatus((current) => reduceKiosk(current, 'SESSION_ACTIVATED'));
-              return;
+        pollResilienceRef.current = notePollSuccess(pollResilienceRef.current, Date.now());
+        setPollHealth((current) => (current === 'ok' ? current : 'ok'));
+
+        if (applied.live?.selectedGarment !== undefined) {
+          const next = applied.live.selectedGarment;
+          setSelectedGarment((current) => {
+            if (!next && !current) return current;
+            if (
+              current?.garmentId === next?.garmentId &&
+              current?.variantId === next?.variantId &&
+              current?.category === next?.category &&
+              current?.isTestFixture === next?.isTestFixture
+            ) {
+              return current;
             }
-            const ok = await activateKioskSession(device.deviceSecret, sessionId);
-            if (ok && life.getSessionId() === sessionId) {
-              setStatus((current) => reduceKiosk(current, 'SESSION_ACTIVATED'));
-            }
-          } else if (event === 'SESSION_ENDED') {
-            life.markSessionEnded();
-            clearSessionUi();
-            setStatus((current) => reduceKiosk(current, 'SESSION_ENDED'));
-          }
-        } catch {
-          // A poll failure is not a session end. The next tick retries.
+            return next ?? null;
+          });
         }
-      })();
-    }, POLL_MS);
 
-    return () => window.clearInterval(poll);
+        const event = applied.event;
+        if (event === 'PAIRING_CLAIMED' && statusRef.current === 'WAITING') {
+          noteActivity(true);
+          setPairingUrl(null);
+          setStatus((current) => reduceKiosk(current, 'PAIRING_CLAIMED'));
+          if (applied.live?.status === 'ACTIVE') {
+            setStatus((current) => reduceKiosk(current, 'SESSION_ACTIVATED'));
+            return;
+          }
+          const ok = await activateKioskSession(device.deviceSecret, sessionId);
+          if (ok && life.getSessionId() === sessionId) {
+            setStatus((current) => reduceKiosk(current, 'SESSION_ACTIVATED'));
+          }
+        } else if (event === 'SESSION_ENDED') {
+          life.markSessionEnded();
+          clearSessionUi();
+          setStatus((current) => reduceKiosk(current, 'SESSION_ENDED'));
+        }
+      } catch {
+        // A poll failure is not a session end. The next tick retries.
+        pollResilienceRef.current = notePollFailure(pollResilienceRef.current, Date.now());
+        setPollHealth(pollResilienceRef.current.health);
+      }
+    };
+
+    const poll = window.setInterval(() => {
+      void runPoll();
+    }, POLL_MS);
+    void runPoll();
+
+    const onOnline = () => {
+      if (shouldForcePollOnReconnect(pollResilienceRef.current)) {
+        void runPoll();
+      }
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') onOnline();
+    };
+    window.addEventListener('online', onOnline);
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(poll);
+      window.removeEventListener('online', onOnline);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [device, status, noteActivity]);
 
   useEffect(() => {
@@ -379,7 +417,17 @@ export function KioskShell() {
     const code = String(formData.get('code') ?? '');
     try {
       const enrolled = await enrollDevice(code);
-      saveDeviceCredential(enrolled);
+      const saved = saveDeviceCredential(enrolled);
+      if (!saved.ok) {
+        setEnrollError(
+          saved.reason === 'quota'
+            ? 'Device storage is full. Free space and try again.'
+            : saved.reason === 'unavailable' || saved.reason === 'restricted'
+              ? 'This browser blocked device storage. Enable local storage or try another browser.'
+              : 'That code could not be used. Ask staff for a new one.',
+        );
+        return;
+      }
       setDevice(enrolled);
       noteActivity(true);
     } catch {
@@ -462,21 +510,34 @@ export function KioskShell() {
               ) : null}
 
               <p className="max-w-md text-sm text-muted">{view.honesty}</p>
+              {pollHealth === 'degraded' ? (
+                <p className="max-w-md text-sm text-accent" role="status" data-testid="poll-degraded">
+                  Sync recovering after a network drop. Session epoch is preserved — retrying…
+                </p>
+              ) : null}
 
               {status === 'ACTIVE' ? (
-                <TryOnPanel
-                  active={tryOnActive}
-                  getFrame={() => cameraRef.current?.readFrame() ?? null}
-                  selectedGarment={selectedGarment}
-                  selectedCategory={selectedGarment?.category ?? null}
-                  selectedIsTestFixture={selectedGarment?.isTestFixture === true}
-                  onPresenceChange={(present) => {
-                    if (present) {
-                      analyticsRef.current.notePersonSeen();
-                      noteActivity(true);
-                    }
+                <ClientErrorBoundary
+                  title="Try-on panel"
+                  body="Pose rendering hit an error. Camera preview continues; tap try again to reload fitting."
+                  onError={() => {
+                    analyticsRef.current.noteRenderError();
                   }}
-                />
+                >
+                  <TryOnPanel
+                    active={tryOnActive}
+                    getFrame={() => cameraRef.current?.readFrame() ?? null}
+                    selectedGarment={selectedGarment}
+                    selectedCategory={selectedGarment?.category ?? null}
+                    selectedIsTestFixture={selectedGarment?.isTestFixture === true}
+                    onPresenceChange={(present) => {
+                      if (present) {
+                        analyticsRef.current.notePersonSeen();
+                        noteActivity(true);
+                      }
+                    }}
+                  />
+                </ClientErrorBoundary>
               ) : null}
 
               {status === 'ACTIVE' || status === 'PAIRED' || status === 'WAITING' ? (
@@ -505,7 +566,14 @@ export function KioskShell() {
                 : 'Camera unavailable. This screen will not invent a feed.'}
           </p>
           <p className="uppercase tracking-[0.25em]">
-            {device ? (showScreensaver ? `${view.status} · POWER SAVE` : view.status) : 'UNENROLLED'}
+            {device
+              ? [
+                  showScreensaver ? `${view.status} · POWER SAVE` : view.status,
+                  pollHealth === 'degraded' ? 'SYNC DEGRADED' : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+              : 'UNENROLLED'}
           </p>
         </footer>
       </div>

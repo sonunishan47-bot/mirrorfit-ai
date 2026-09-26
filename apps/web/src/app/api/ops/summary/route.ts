@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getStaffContext } from '@/lib/auth/staff';
 import { loadOpsSnapshot } from '@/lib/ops/load-ops-snapshot';
+import { opsQueryAttemptsTenantOverride, resolveOpsShopId } from '@/lib/ops/ops-shop-scope';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,11 +19,11 @@ export async function GET(request: Request): Promise<NextResponse> {
   }
 
   const url = new URL(request.url);
-  const shopParam = url.searchParams.get('shop_id');
-  const shopId =
-    staff.shopId ??
-    (shopParam && /^[0-9a-f-]{36}$/i.test(shopParam) ? shopParam : null);
+  if (opsQueryAttemptsTenantOverride(url.searchParams)) {
+    return NextResponse.json({ error: 'invalid_request' }, { status: 400 });
+  }
 
+  const shopId = resolveOpsShopId(staff.shopId, url.searchParams.get('shop_id'));
   const snapshot = await loadOpsSnapshot(staff, { shopId });
   const body = {
     shop_id: snapshot.shop_id,

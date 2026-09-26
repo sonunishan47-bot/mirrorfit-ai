@@ -8,6 +8,7 @@ import { PairingCard } from '@/components/customer/pairing-card';
 import { PrimaryButton } from '@/components/customer/primary-button';
 import { CustomerShell } from '@/components/customer/shell';
 import { StatusMessage } from '@/components/customer/status-message';
+import { ClientErrorBoundary } from '@/components/client-error-boundary';
 import { claimPairingSession, type ClaimFailureReason } from '@/lib/customer/claim-client';
 import {
   presentCustomer,
@@ -155,7 +156,14 @@ export function PairingExperience({
                     {view.action}
                   </PrimaryButton>
                 ) : null}
-                {status === 'MIRROR_READY' ? <SessionCatalog readToken={readToken} /> : null}
+                {status === 'MIRROR_READY' ? (
+                  <ClientErrorBoundary
+                    title="Catalog"
+                    body="The garment list hit an error. Your pairing token was not shown. Try again to reload the catalog."
+                  >
+                    <SessionCatalog readToken={readToken} />
+                  </ClientErrorBoundary>
+                ) : null}
               </>
             )}
           </div>

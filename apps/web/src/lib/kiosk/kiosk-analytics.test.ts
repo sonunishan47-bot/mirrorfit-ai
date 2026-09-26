@@ -21,12 +21,20 @@ describe('KioskAnalyticsBuffer', () => {
     buffer.noteSessionStarted();
     buffer.notePersonSeen();
     buffer.noteSessionEnded();
+    buffer.noteRenderError();
     const metrics = buffer.toHeartbeatMetrics();
     expect(metrics['sessions_started']).toBe(1);
     expect(metrics['person_seen_ticks']).toBe(1);
     expect(metrics['sessions_ended']).toBe(1);
+    expect(metrics['render_errors']).toBe(1);
     for (const value of Object.values(metrics)) {
       expect(typeof value).toBe('number');
     }
+  });
+
+  it('caps counters for long-running sessions', () => {
+    const buffer = new KioskAnalyticsBuffer();
+    for (let i = 0; i < 5; i += 1) buffer.noteRenderError();
+    expect(buffer.snapshot().render_errors).toBe(5);
   });
 });

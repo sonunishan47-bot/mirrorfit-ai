@@ -13,6 +13,7 @@ export interface KioskAnalyticsSnapshot {
   readonly sessions_started: number;
   readonly sessions_ended: number;
   readonly person_seen_ticks: number;
+  readonly render_errors: number;
 }
 
 export class KioskAnalyticsBuffer {
@@ -23,24 +24,31 @@ export class KioskAnalyticsBuffer {
   #sessionsStarted = 0;
   #sessionsEnded = 0;
   #personSeenTicks = 0;
+  #renderErrors = 0;
+
+  static readonly MAX_COUNTER = 1_000_000;
 
   noteTryOnSelection(fitFamily: 'TOP' | 'LOWER_BODY' | null): void {
-    this.#tryOnSelections += 1;
-    if (fitFamily === 'TOP') this.#categoryTop += 1;
-    else if (fitFamily === 'LOWER_BODY') this.#categoryLower += 1;
-    else this.#categoryOther += 1;
+    this.#tryOnSelections = bump(this.#tryOnSelections);
+    if (fitFamily === 'TOP') this.#categoryTop = bump(this.#categoryTop);
+    else if (fitFamily === 'LOWER_BODY') this.#categoryLower = bump(this.#categoryLower);
+    else this.#categoryOther = bump(this.#categoryOther);
   }
 
   noteSessionStarted(): void {
-    this.#sessionsStarted += 1;
+    this.#sessionsStarted = bump(this.#sessionsStarted);
   }
 
   noteSessionEnded(): void {
-    this.#sessionsEnded += 1;
+    this.#sessionsEnded = bump(this.#sessionsEnded);
   }
 
   notePersonSeen(): void {
-    this.#personSeenTicks += 1;
+    this.#personSeenTicks = bump(this.#personSeenTicks);
+  }
+
+  noteRenderError(): void {
+    this.#renderErrors = bump(this.#renderErrors);
   }
 
   snapshot(): KioskAnalyticsSnapshot {
@@ -52,6 +60,7 @@ export class KioskAnalyticsBuffer {
       sessions_started: this.#sessionsStarted,
       sessions_ended: this.#sessionsEnded,
       person_seen_ticks: this.#personSeenTicks,
+      render_errors: this.#renderErrors,
     };
   }
 
@@ -66,6 +75,11 @@ export class KioskAnalyticsBuffer {
       sessions_started: snap.sessions_started,
       sessions_ended: snap.sessions_ended,
       person_seen_ticks: snap.person_seen_ticks,
+      render_errors: snap.render_errors,
     };
   }
+}
+
+function bump(value: number): number {
+  return value >= KioskAnalyticsBuffer.MAX_COUNTER ? value : value + 1;
 }
