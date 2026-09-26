@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { presentTryOn, reduceTryOn } from './tryon-runtime';
-import { OverlayRenderer } from './overlay-renderer';
+import { OverlayRenderer, resolveDrawAlpha } from './overlay-renderer';
 import {
   parseGarmentAssetRef,
   TEST_FIXTURE_OVERLAY_ASSET,
@@ -246,6 +246,12 @@ describe('overlay renderer', () => {
     );
     expect(commands).toEqual(['clear']);
     await renderer.dispose();
+  });
+
+  it('derives draw alpha from confidence and yaw without inventing a mask', () => {
+    expect(resolveDrawAlpha(1, { yaw: 0 })).toBeCloseTo(1);
+    expect(resolveDrawAlpha(0.8, { yaw: 0.5 })).toBeLessThan(0.8);
+    expect(resolveDrawAlpha(0.9, { opacity: 0.4, yaw: 0.9 })).toBeCloseTo(0.4);
   });
 });
 

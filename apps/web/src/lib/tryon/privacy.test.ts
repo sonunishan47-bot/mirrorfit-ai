@@ -24,9 +24,12 @@ describe('Phase 5 privacy invariants', () => {
 
   it('does not expose device secrets or storage paths on phone catalog surfaces', () => {
     const catalog = source('lib/customer/catalog-client.ts');
+    const browse = source('lib/customer/catalog-browse.ts');
+    const share = source('lib/customer/product-share.ts');
     const phone = source('app/s/session-catalog.tsx');
-    const combined = `${catalog}\n${phone}`;
+    const combined = `${catalog}\n${browse}\n${share}\n${phone}`;
     expect(combined).not.toMatch(/device_secret|SUPABASE_SECRET_KEY|storage_path|organization_id/);
+    expect(combined).not.toMatch(/garment-overlay|overlay_url/);
   });
 
   it('keeps the official model URL on Google storage and local WASM', () => {

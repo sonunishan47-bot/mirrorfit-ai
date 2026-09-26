@@ -3,35 +3,56 @@
 import { useEffect, useRef, useState } from 'react';
 
 import {
+  AsyncTryOnQueue,
   CameraFramePipeline,
   FrameRateCounter,
   LandmarkFittingEngine,
+  OverlayBitmapCache,
+  OverlayLoadGuard,
   OverlayRenderer,
+  PHOTOREALISTIC_UNAVAILABLE_REASON,
+  TEST_FIXTURE_OVERLAY_LAYOUT,
+  TEST_FIXTURE_PANTS_LAYOUT,
+  UnavailablePhotorealisticTryOnProvider,
   UnavailableSegmentationProvider,
+  computeOverlayOpacity,
+  createTestFixturePantsBitmap,
   createTestFixtureShirtBitmap,
   deriveBodyGeometry,
+  deriveLowerBodyGeometry,
   describePoseReadiness,
   formatPoseReadiness,
+  loadOverlayBitmap,
+  lowerBodyWarpParallelogram,
+  lowerOverlayDefaults,
   overlaySourceForSelection,
   presentTryOn,
   reduceTryOn,
   resolveFitCategory,
+  topOverlayDefaults,
+  torsoWarpParallelogram,
   type CameraFrame,
+  type OverlayLayout,
   type PoseProvider,
+  type WarpParallelogram,
 } from '@mirrorfit/tryon-core';
 import type { TryOnRuntimeStatus } from '@mirrorfit/types';
 
+import { loadDeviceCredential } from '@/lib/device/store';
+import { fetchGarmentOverlay } from '@/lib/tryon/garment-overlay-client';
 import { createKioskPoseProvider } from '@/lib/tryon/mediapipe-pose-provider';
 
 /**
- * Phase 5 try-on runtime. Runs only while the Phase 4 session is ACTIVE.
+ * Try-on runtime. Runs only while the session is ACTIVE.
  *
  * Pose uses official MediaPipe Pose Landmarker when it initializes.
- * Segmentation is still unavailable. Overlay is a labelled test-fixture
- * shirt placed from real landmarks — not a product photograph.
+ * Segmentation is still unavailable. Photorealistic / diffusion try-on is
+ * honestly unavailable (no frame upload, no on-device model) — the kiosk
+ * falls back to pose-geometry / pose-warp overlays.
  *
  * Pose initialize/dispose is tied to `active` only. Garment changes do not
- * reload the model.
+ * reload the model. Overlay loads use a generation guard so rapid phone
+ * category/garment changes never race.
  */
 export function TryOnPanel({
   active,
@@ -39,28 +60,34 @@ export function TryOnPanel({
   selectedGarment,
   selectedCategory,
   selectedIsTestFixture = false,
+  onPresenceChange,
 }: {
   active: boolean;
   getFrame: () => CameraFrame | null;
   selectedGarment: { garmentId: string; variantId: string } | null;
   selectedCategory?: string | null;
   selectedIsTestFixture?: boolean;
+  /** Optional wake signal for kiosk power-save — person seen / lost only. */
+  onPresenceChange?: (present: boolean) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const getFrameRef = useRef(getFrame);
   const garmentRef = useRef({ selectedGarment, selectedCategory, selectedIsTestFixture });
+  const presenceRef = useRef(onPresenceChange);
   const statusRef = useRef<TryOnRuntimeStatus>('CAMERA_READY');
   const [status, setStatus] = useState<TryOnRuntimeStatus>('CAMERA_READY');
   const [reason, setReason] = useState<string | null>(null);
   const [poseFps, setPoseFps] = useState<number | null>(null);
   const [dropped, setDropped] = useState(0);
   const [poseHint, setPoseHint] = useState<string | null>(null);
+  const [hasOverlayAsset, setHasOverlayAsset] = useState(false);
   const view = presentTryOn(status);
 
   useEffect(() => {
     getFrameRef.current = getFrame;
     garmentRef.current = { selectedGarment, selectedCategory, selectedIsTestFixture };
-  }, [getFrame, selectedGarment, selectedCategory, selectedIsTestFixture]);
+    presenceRef.current = onPresenceChange;
+  }, [getFrame, selectedGarment, selectedCategory, selectedIsTestFixture, onPresenceChange]);
 
   useEffect(() => {
     statusRef.current = status;
@@ -74,8 +101,13 @@ export function TryOnPanel({
     const segmentation = new UnavailableSegmentationProvider();
     const fitting = new LandmarkFittingEngine();
     const renderer = new OverlayRenderer();
+    const photorealistic = new UnavailablePhotorealisticTryOnProvider();
+    const tryOnQueue = new AsyncTryOnQueue(2_500);
     const poseFpsCounter = new FrameRateCounter();
-    const fixtureBitmap = createTestFixtureShirtBitmap();
+    const shirtFixture = createTestFixtureShirtBitmap();
+    const pantsFixture = createTestFixturePantsBitmap();
+    const overlayCache = new OverlayBitmapCache(8);
+    const loadGuard = new OverlayLoadGuard();
     const canvas = canvasRef.current;
     if (canvas) {
       renderer.attach(canvas);
@@ -85,6 +117,7 @@ export function TryOnPanel({
     let pose: PoseProvider | null = null;
     let pipeline: CameraFramePipeline | null = null;
     let lastGarmentKey = '';
+    let overlayLoaded = false;
 
     const move = (event: Parameters<typeof reduceTryOn>[1]) => {
       if (disposed) return;
@@ -105,11 +138,148 @@ export function TryOnPanel({
         selected: current.selectedGarment !== null,
         isTestFixture: current.selectedIsTestFixture,
         fitCategory: resolveFitCategory(current.selectedCategory),
+        hasOverlayAsset: overlayLoaded,
       });
     }
 
-    function applyOverlaySource(): void {
-      renderer.setOverlay(currentOverlaySource() === 'test_fixture' ? fixtureBitmap : null);
+    function applyCategoryDefaults(category: string | null | undefined): void {
+      const family = resolveFitCategory(category);
+      if (family === 'TOP') {
+        fitting.setWidthFactor(topOverlayDefaults(category)?.widthFactor ?? null);
+        return;
+      }
+      if (family === 'LOWER_BODY') {
+        fitting.setWidthFactor(lowerOverlayDefaults(category)?.widthFactor ?? null);
+        return;
+      }
+      fitting.setWidthFactor(null);
+    }
+
+    function applyFixtureOverlay(family: 'TOP' | 'LOWER_BODY'): void {
+      loadGuard.begin();
+      if (family === 'LOWER_BODY') {
+        fitting.setAnchorMode('hips');
+        applyCategoryDefaults(garmentRef.current.selectedCategory);
+        renderer.setOverlay(pantsFixture, TEST_FIXTURE_PANTS_LAYOUT);
+      } else {
+        fitting.setAnchorMode('shoulders');
+        applyCategoryDefaults(garmentRef.current.selectedCategory);
+        renderer.setOverlay(shirtFixture, TEST_FIXTURE_OVERLAY_LAYOUT);
+      }
+      overlayLoaded = true;
+      setHasOverlayAsset(true);
+      noteReason(null);
+    }
+
+    function clearOverlay(): void {
+      loadGuard.begin();
+      tryOnQueue.cancel();
+      fitting.setAnchorMode('center');
+      fitting.setWidthFactor(null);
+      renderer.setOverlay(null);
+      overlayLoaded = false;
+      setHasOverlayAsset(false);
+    }
+
+    async function applyCatalogOverlay(
+      garmentId: string,
+      variantId: string,
+      category: string | null | undefined,
+      family: 'TOP' | 'LOWER_BODY',
+    ): Promise<boolean> {
+      const token = loadGuard.begin();
+      const secret = loadDeviceCredential()?.deviceSecret ?? null;
+      if (!secret) {
+        if (loadGuard.isCurrent(token)) clearOverlay();
+        return false;
+      }
+
+      noteReason('Loading garment overlay…');
+      const meta = await fetchGarmentOverlay(secret, garmentId, variantId);
+      if (!loadGuard.isCurrent(token) || disposed) return false;
+      if (!meta) {
+        clearOverlay();
+        noteReason('No drawable garment overlay asset is available.');
+        return false;
+      }
+
+      const defaults =
+        family === 'TOP' ? topOverlayDefaults(category) : lowerOverlayDefaults(category);
+      let entry = overlayCache.get(meta.content_hash);
+      if (!entry) {
+        const loaded = await loadOverlayBitmap(meta.overlay_url, {
+          expectedContentHash: meta.content_hash,
+        });
+        if (!loadGuard.isCurrent(token) || disposed) {
+          if (loaded && 'close' in loaded.bitmap) {
+            (loaded.bitmap as ImageBitmap).close?.();
+          }
+          return false;
+        }
+        if (!loaded) {
+          clearOverlay();
+          noteReason('No drawable garment overlay asset is available.');
+          return false;
+        }
+        entry = { bitmap: loaded.bitmap, width: loaded.width, height: loaded.height };
+        overlayCache.set(meta.content_hash, entry);
+      }
+
+      if (!loadGuard.isCurrent(token) || disposed) return false;
+
+      const layout: OverlayLayout = {
+        anchor:
+          meta.anchor ??
+          defaults?.anchor ??
+          (family === 'LOWER_BODY' ? { x: 0.5, y: 0.08 } : { x: 0.5, y: 0.22 }),
+        aspectRatio: entry.width / entry.height,
+      };
+      fitting.setAnchorMode(family === 'LOWER_BODY' ? 'hips' : 'shoulders');
+      fitting.setWidthFactor(defaults?.widthFactor ?? null);
+      renderer.setOverlay(entry.bitmap, layout);
+      overlayLoaded = true;
+      setHasOverlayAsset(true);
+      noteReason(null);
+      return true;
+    }
+
+    /**
+     * Probe the photorealistic provider asynchronously. Always null today —
+     * never replaces the geometric overlay with a decorative stand-in.
+     * Timeout / cancel leaves the pose-geometry path unchanged.
+     */
+    function probePhotorealisticFallback(): void {
+      const current = garmentRef.current;
+      if (!current.selectedGarment) return;
+      void tryOnQueue.enqueue(async (signal) => {
+        if (signal.cancelled || disposed) return null;
+        const result = await photorealistic.generate({
+          frame: {
+            timestampMs: Date.now(),
+            width: 1,
+            height: 1,
+            source: shirtFixture,
+          },
+          fit: {
+            timestampMs: Date.now(),
+            confidence: 0,
+            transform: {
+              translate: { x: 0.5, y: 0.5 },
+              scaleX: 0,
+              scaleY: 0,
+              rotation: 0,
+            },
+          },
+          garmentId: current.selectedGarment!.garmentId,
+          variantId: current.selectedGarment!.variantId,
+        });
+        if (signal.cancelled || disposed) return null;
+        if (result === null && photorealistic.availability === 'unavailable') {
+          // Geometric overlay already active — keep it.
+          return null;
+        }
+        return result;
+      });
     }
 
     async function syncGarment(): Promise<void> {
@@ -119,18 +289,41 @@ export function TryOnPanel({
         : '';
       if (key === lastGarmentKey) return;
       lastGarmentKey = key;
-      applyOverlaySource();
+
       if (!current.selectedGarment) {
+        clearOverlay();
         fitting.clearGarment();
         move('GARMENT_CLEARED');
         return;
       }
+
       await fitting.loadGarment(
         current.selectedGarment.garmentId,
         current.selectedGarment.variantId,
         current.selectedCategory ?? null,
       );
       if (disposed) return;
+
+      const fitCategory = resolveFitCategory(current.selectedCategory);
+      if (fitCategory !== 'TOP' && fitCategory !== 'LOWER_BODY') {
+        clearOverlay();
+        move('GARMENT_CHOSEN');
+        return;
+      }
+
+      if (current.selectedIsTestFixture) {
+        applyFixtureOverlay(fitCategory);
+      } else {
+        await applyCatalogOverlay(
+          current.selectedGarment.garmentId,
+          current.selectedGarment.variantId,
+          current.selectedCategory,
+          fitCategory,
+        );
+        if (disposed) return;
+      }
+
+      probePhotorealisticFallback();
       move('GARMENT_CHOSEN');
     }
 
@@ -140,6 +333,7 @@ export function TryOnPanel({
         pose = await createKioskPoseProvider();
         await segmentation.initialize();
         await fitting.initialize();
+        await photorealistic.initialize();
         if (canvas) {
           await renderer.initialize({ width: canvas.width || 1, height: canvas.height || 1 });
         }
@@ -169,6 +363,8 @@ export function TryOnPanel({
                 const landmarks = await pose.processFrame(frame);
                 if (disposed) return;
                 const selected = garmentRef.current.selectedGarment;
+                const category = garmentRef.current.selectedCategory;
+                const family = resolveFitCategory(category);
 
                 if (landmarks) {
                   poseFpsCounter.tick(frame.timestampMs);
@@ -179,13 +375,22 @@ export function TryOnPanel({
                   const hint = formatPoseReadiness(describePoseReadiness(landmarks));
                   setPoseHint((current) => (current === hint ? current : hint));
                   move('PERSON_SEEN');
+                  presenceRef.current?.(true);
                 } else {
                   setPoseHint((current) => (current === null ? current : null));
                   move('PERSON_LOST');
+                  presenceRef.current?.(false);
                 }
 
                 const geometry = landmarks ? deriveBodyGeometry(landmarks) : null;
-                if (selected && landmarks && geometry) {
+                const lowerGeometry =
+                  landmarks && family === 'LOWER_BODY'
+                    ? deriveLowerBodyGeometry(landmarks)
+                    : null;
+                const geometryReady =
+                  family === 'LOWER_BODY' ? lowerGeometry !== null : geometry !== null;
+
+                if (selected && landmarks && geometryReady) {
                   const fit = await fitting.fit({
                     pose: landmarks,
                     geometry,
@@ -193,11 +398,9 @@ export function TryOnPanel({
                     depth: null,
                   });
                   if (disposed) return;
-                  const drawable = currentOverlaySource() === 'test_fixture';
-                  if (fitting.lastStatus === 'lower_body_not_implemented') {
-                    noteReason('LOWER BODY FITTING NOT IMPLEMENTED');
-                    move('FIT_NOT_READY');
-                  } else if (fit && drawable) {
+                  const source = currentOverlaySource();
+                  const drawable = source === 'test_fixture' || source === 'catalog_overlay';
+                  if (fit && drawable) {
                     noteReason(null);
                     move('FIT_READY');
                   } else if (fit && !drawable) {
@@ -209,13 +412,45 @@ export function TryOnPanel({
                   if (canvas && frame.width > 0 && frame.height > 0) {
                     renderer.resize({ width: frame.width, height: frame.height });
                   }
-                  await renderer.render(frame, fit && drawable ? fit : null);
+                  let warp: WarpParallelogram | null = null;
+                  if (drawable && family === 'TOP' && geometry) {
+                    warp = torsoWarpParallelogram(geometry);
+                  } else if (drawable && family === 'LOWER_BODY' && lowerGeometry) {
+                    warp = lowerBodyWarpParallelogram(lowerGeometry);
+                  }
+                  const occlusionGeometry =
+                    geometry ??
+                    (lowerGeometry
+                      ? {
+                          timestampMs: landmarks.timestampMs,
+                          shoulderWidth: lowerGeometry.hipWidth,
+                          hipWidth: lowerGeometry.hipWidth,
+                          torsoHeight: lowerGeometry.legLength,
+                          roll: lowerGeometry.hipRoll,
+                          yaw: 0,
+                          shoulderCenter: lowerGeometry.hipCenter,
+                          hipCenter: lowerGeometry.hipCenter,
+                          center: lowerGeometry.hipCenter,
+                        }
+                      : null);
+                  const occlusion = occlusionGeometry
+                    ? computeOverlayOpacity({
+                        geometry: occlusionGeometry,
+                        poseConfidence: landmarks.confidence,
+                        regions: segmentation.readRegions(frame.timestampMs),
+                      })
+                    : { overlayOpacity: Math.min(1, Math.max(0, landmarks.confidence)) };
+                  await renderer.render(frame, fit && drawable ? fit : null, {
+                    opacity: fit && drawable ? occlusion.overlayOpacity : 0,
+                    yaw: geometry?.yaw ?? 0,
+                    warp,
+                  });
                 } else {
                   if (canvas && frame.width > 0 && frame.height > 0) {
                     renderer.resize({ width: frame.width, height: frame.height });
                   }
                   await renderer.render(frame, null);
-                  if (selected && !geometry) {
+                  if (selected && !geometryReady) {
                     move('FIT_NOT_READY');
                   }
                 }
@@ -249,10 +484,14 @@ export function TryOnPanel({
 
     return () => {
       disposed = true;
+      loadGuard.invalidate();
+      tryOnQueue.cancel();
+      overlayCache.clear();
       void pipeline?.dispose();
       void pose?.dispose();
       void segmentation.dispose();
       void fitting.dispose();
+      void photorealistic.dispose();
       void renderer.dispose();
     };
   }, [active]);
@@ -266,6 +505,7 @@ export function TryOnPanel({
     selected: selectedGarment !== null,
     isTestFixture: selectedIsTestFixture,
     fitCategory: family,
+    hasOverlayAsset,
   });
   const layer =
     status === 'PREVIEW'
@@ -296,12 +536,13 @@ export function TryOnPanel({
         {layer}. {view.honesty}
         {reason ? ` ${reason}` : ''}
         {selectedGarment
-          ? family === 'LOWER_BODY'
-            ? ' LOWER BODY FITTING NOT IMPLEMENTED.'
-            : overlayKind === 'test_fixture'
-              ? ' TEST FIXTURE overlay only — NOT A COMMERCIAL PRODUCT — NOT A PHOTOGRAPHIC AI TRY-ON.'
+          ? overlayKind === 'test_fixture'
+            ? ` TEST FIXTURE ${family === 'LOWER_BODY' ? 'pants' : 'shirt'} overlay only — NOT A COMMERCIAL PRODUCT — NOT A PHOTOGRAPHIC AI TRY-ON.`
+            : overlayKind === 'catalog_overlay'
+              ? ' Commercial overlay from shop catalog — pose-geometry / pose-warp placement, not photorealistic try-on.'
               : ' No drawable garment overlay asset is available.'
           : ' No garment is selected.'}
+        {` ${PHOTOREALISTIC_UNAVAILABLE_REASON}`}
         {poseHint ? ` ${poseHint}` : ''}
         {poseFps !== null ? ` Pose ${poseFps.toFixed(0)} fps.` : ''}
         {dropped > 0 ? ` Dropped ${dropped} busy frames.` : ''}
