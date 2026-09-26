@@ -21,6 +21,7 @@ import {
   selectSessionGarment,
   type CustomerCatalogItem,
 } from '@/lib/customer/catalog-client';
+import { fixtureCatalogThumbnailSrc } from '@/lib/customer/fixture-catalog-thumbnail';
 import { shareProductLook, type ShareableProduct } from '@/lib/customer/product-share';
 
 type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
@@ -41,6 +42,7 @@ export function SessionCatalog({
 }) {
   const [items, setItems] = useState<CustomerCatalogItem[] | null>(null);
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
+  const [loadSlow, setLoadSlow] = useState(false);
   const [filter, setFilter] = useState<CatalogBrowseFilter>('all');
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [selectedGarmentId, setSelectedGarmentId] = useState<string | null>(null);
@@ -56,22 +58,37 @@ export function SessionCatalog({
 
   useEffect(() => {
     let cancelled = false;
+    const slowTimer = window.setTimeout(() => {
+      if (!cancelled) setLoadSlow(true);
+    }, 2500);
+
     void (async () => {
       const token = readToken();
-      if (!token) return;
+      if (!token) {
+        if (!cancelled) {
+          setItems([]);
+          setLoadStatus('error');
+          setLoadSlow(false);
+        }
+        return;
+      }
       setLoadStatus('loading');
+      setLoadSlow(false);
       const catalog = await listSessionCatalog(token);
       if (cancelled) return;
       if (catalog === null) {
         setItems([]);
         setLoadStatus('error');
+        setLoadSlow(false);
         return;
       }
       setItems(catalog);
       setLoadStatus(catalog.length === 0 ? 'empty' : 'ready');
+      setLoadSlow(false);
     })();
     return () => {
       cancelled = true;
+      window.clearTimeout(slowTimer);
       guardRef.current.invalidate();
     };
   }, [readToken, reloadKey]);
@@ -252,16 +269,24 @@ export function SessionCatalog({
 
       {loadStatus === 'loading' ? (
         <div
-          className="flex items-center gap-3 py-6 text-sm text-customer-quiet"
+          className="flex flex-col gap-2 py-6 text-sm text-customer-quiet"
           role="status"
           aria-busy="true"
           data-testid="catalog-loading"
         >
-          <span
-            className="inline-block size-5 animate-spin rounded-full border-2 border-forest/25 border-t-forest"
-            aria-hidden
-          />
-          Loading this shop&apos;s catalog…
+          <div className="flex items-center gap-3">
+            <span
+              className="inline-block size-5 animate-spin rounded-full border-2 border-forest/25 border-t-forest"
+              aria-hidden
+            />
+            Loading this shop&apos;s catalog…
+          </div>
+          {loadSlow ? (
+            <p className="pl-8 text-xs" data-testid="catalog-loading-slow">
+              Still waiting on the shop catalog. Check Wi‑Fi if this continues — you can retry
+              below if it fails.
+            </p>
+          ) : null}
         </div>
       ) : loadStatus === 'error' ? (
         <div className="space-y-3">
@@ -299,6 +324,7 @@ export function SessionCatalog({
             ]
               .filter(Boolean)
               .join(' · ');
+            const thumbnailSrc = fixtureCatalogThumbnailSrc(group.name, group.isTestFixture);
 
             return (
               <li key={group.garmentId} className="space-y-0">
@@ -307,6 +333,12 @@ export function SessionCatalog({
                   category={group.category}
                   meta={meta}
                   selected={isSelected}
+                  imageSrc={thumbnailSrc}
+                  {...(thumbnailSrc
+                    ? {
+                        imageAlt: `${group.name} sample — TEST FIXTURE, not a commercial product`,
+                      }
+                    : {})}
                   badge={
                     group.isTestFixture
                       ? 'Test fixture'

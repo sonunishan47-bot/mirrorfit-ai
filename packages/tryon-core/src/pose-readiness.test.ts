@@ -48,4 +48,17 @@ describe('pose readiness for TOP fitting', () => {
     expect(readiness.shouldersReady).toBe(false);
     expect(readiness.geometryReady).toBe(false);
   });
+
+  it('reports hips missing when hip landmarks are below confidence (expected until stance is clear)', () => {
+    const readiness = describePoseReadiness({
+      ...READY,
+      keypoints: READY.keypoints.map((point) =>
+        point.name.includes('HIP') ? { ...point, confidence: 0.1 } : point,
+      ),
+    });
+    expect(readiness.hipsReady).toBe(false);
+    expect(readiness.shouldersReady).toBe(true);
+    expect(readiness.geometryReady).toBe(false);
+    expect(formatPoseReadiness(readiness)).toContain('Hips missing');
+  });
 });

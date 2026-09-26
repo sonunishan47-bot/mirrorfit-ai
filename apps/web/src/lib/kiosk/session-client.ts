@@ -99,22 +99,61 @@ export async function createKioskSession(
   };
 }
 
+/**
+ * Thrown when `/api/session/current` cannot be trusted as a lifecycle signal.
+ * The kiosk must not treat this as SESSION_ENDED (no QR regenerate / clear).
+ */
+export class LiveSessionPollError extends Error {
+  readonly code: 'UNAUTHORIZED' | 'TRANSIENT';
+
+  constructor(code: 'UNAUTHORIZED' | 'TRANSIENT', message: string) {
+    super(message);
+    this.name = 'LiveSessionPollError';
+    this.code = code;
+  }
+}
+
+/**
+ * Reads the live session for this display.
+ *
+ * Semantics:
+ * - 200 + session object → session
+ * - 200 + session: null → null (no live row — real end / idle display)
+ * - 401 / 403 → LiveSessionPollError UNAUTHORIZED (not a normal session end)
+ * - 5xx / other non-OK / network failure → LiveSessionPollError TRANSIENT
+ *   (must not clear QR, garment, or ACTIVE state)
+ */
 export async function readLiveSession(
   secret: string,
   fetchFn: typeof fetch = fetch,
 ): Promise<LiveKioskSession | null> {
-  const response = await fetchFn('/api/session/current', {
-    headers: { authorization: `Bearer ${secret}` },
-  });
-  if (response.status === 401) {
-    throw new Error('UNAUTHORIZED');
+  let response: Response;
+  try {
+    response = await fetchFn('/api/session/current', {
+      headers: { authorization: `Bearer ${secret}` },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'network failure';
+    throw new LiveSessionPollError('TRANSIENT', message);
   }
+
+  if (response.status === 401 || response.status === 403) {
+    throw new LiveSessionPollError('UNAUTHORIZED', 'UNAUTHORIZED');
+  }
+
   if (!response.ok) {
-    return null;
+    throw new LiveSessionPollError(
+      'TRANSIENT',
+      `POLL_TRANSIENT_${response.status || 'UNKNOWN'}`,
+    );
   }
+
   const body = (await readJson(response)) as Record<string, unknown> | null;
   const session = body?.['session'];
-  if (!session || typeof session !== 'object') {
+  if (session === null || session === undefined) {
+    return null;
+  }
+  if (typeof session !== 'object') {
     return null;
   }
   const record = session as Record<string, unknown>;
@@ -174,11 +213,14 @@ export async function endKioskSession(
  * Maps a status poll onto a kiosk event. Does not call activate or end;
  * the shell does that after the machine accepts the event.
  *
- * A missing live row (null) means the local session is gone — phone left,
- * expired, or staff-ended. A live row with a *different* session id is
- * not treated as ended: after END → create, a stale or eventually-consistent
- * poll can still observe the previous row, and ending on mismatch tears
- * down the fresh WAITING QR. Same-id ENDED/EXPIRED/expiry still ends.
+ * A missing live row (null from a successful 200 `{ session: null }` read)
+ * means the local session is gone — phone left, expired, or staff-ended.
+ * Transient poll failures must throw from `readLiveSession` instead of
+ * returning null, so they never reach this mapper as SESSION_ENDED.
+ * A live row with a *different* session id is not treated as ended: after
+ * END → create, a stale or eventually-consistent poll can still observe the
+ * previous row, and ending on mismatch tears down the fresh WAITING QR.
+ * Same-id ENDED/EXPIRED/expiry still ends.
  */
 export function eventFromLiveSession(
   live: LiveKioskSession | null,

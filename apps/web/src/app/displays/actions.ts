@@ -170,6 +170,10 @@ export async function issueEnrollmentCode(
  * and the column grant limits them to `label` and `revoked_at`, so the
  * database enforces both who and what. Reaching for the admin client here
  * would replace two enforced constraints with a comment.
+ *
+ * Setting `revoked_at` fires `device_credentials_after_revoke`, which marks
+ * the owning display `REVOKED` in the same transaction. If this update
+ * matches no row, the display status is left unchanged.
  */
 export async function revokeCredential(
   _previous: ActionResult,
@@ -205,5 +209,6 @@ export async function revokeCredential(
   });
 
   revalidatePath('/displays');
+  revalidatePath('/ops');
   return { ok: true, message: 'Credential revoked. That mirror must be re-enrolled.' };
 }

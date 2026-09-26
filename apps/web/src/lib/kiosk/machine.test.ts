@@ -37,18 +37,32 @@ describe('kiosk state transitions', () => {
 });
 
 describe('kiosk copy stays honest', () => {
-  it('says the attract screen is a camera shell, not a try-on', () => {
+  it('says the attract screen is ready for a live try-on', () => {
     const view = presentKiosk('IDLE');
     expect(view.title).toBe('MIRRORFIT AI');
     expect(view.subtitle).toBe('Scan to Start');
     expect(view.showQrPlaceholder).toBe(true);
-    expect(view.honesty.toLowerCase()).toContain('not implemented');
+    expect(view.honesty.toLowerCase()).toContain('camera ready');
+    expect(view.honesty.toLowerCase()).toContain('try-on');
+    expect(view.honesty.toLowerCase()).not.toContain('not implemented');
   });
 
-  it('does not describe the live camera as fitting', () => {
+  it('says a paired phone is preparing the live try-on', () => {
+    const view = presentKiosk('PAIRED');
+    expect(view.showQrPlaceholder).toBe(false);
+    expect(view.honesty.toLowerCase()).toContain('phone connected');
+    expect(view.honesty.toLowerCase()).toContain('preparing');
+    expect(view.honesty.toLowerCase()).not.toContain('not exchanging');
+  });
+
+  it('describes active pose overlay fitting without claiming photorealistic AI', () => {
     const view = presentKiosk('ACTIVE');
     expect(view.showQrPlaceholder).toBe(false);
-    expect(view.honesty.toLowerCase()).toContain('not an ai try-on');
+    expect(view.subtitle.toLowerCase()).toContain('live pose');
+    expect(view.subtitle.toLowerCase()).not.toContain('preview only');
+    expect(view.honesty.toLowerCase()).toContain('pose landmarks');
+    expect(view.honesty.toLowerCase()).toContain('overlay');
+    expect(view.honesty.toLowerCase()).toContain('not a photorealistic');
   });
 
   it('covers every status the glass can show', () => {

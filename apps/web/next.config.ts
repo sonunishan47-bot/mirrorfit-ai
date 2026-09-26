@@ -1,6 +1,7 @@
 import type { NextConfig } from 'next';
 
 import { ALLOWED_DEV_ORIGINS } from './src/lib/dev/allowed-dev-origins';
+import { buildSecurityHeaders } from './src/lib/security/headers';
 
 /**
  * Workspace packages ship TypeScript source rather than build output, so Next
@@ -16,14 +17,18 @@ const workspacePackages = [
   '@mirrorfit/ui',
 ];
 
-const securityHeaders = [
-  { key: 'X-Content-Type-Options', value: 'nosniff' },
-  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  // Neither the kiosk nor the customer phone UI is ever embedded.
-  { key: 'X-Frame-Options', value: 'DENY' },
-  // The mirror needs the camera; nothing else is granted.
-  { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=()' },
-];
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+if (!supabaseUrl) {
+  throw new Error(
+    'NEXT_PUBLIC_SUPABASE_URL is required to build CSP connect-src / img-src. ' +
+      'Copy .env.example to apps/web/.env.local (or set CI placeholders).',
+  );
+}
+
+const securityHeaders = buildSecurityHeaders({
+  nodeEnv: process.env.NODE_ENV ?? 'development',
+  supabaseUrl,
+});
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -41,7 +46,7 @@ const nextConfig: NextConfig = {
     Promise.resolve([
       {
         source: '/:path*',
-        headers: securityHeaders,
+        headers: securityHeaders.map((h) => ({ key: h.key, value: h.value })),
       },
     ]),
 };

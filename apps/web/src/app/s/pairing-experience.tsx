@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { BrandHeader } from '@/components/customer/brand-header';
 import { ErrorState } from '@/components/customer/error-state';
@@ -98,7 +98,8 @@ export function PairingExperience({
     return () => window.clearTimeout(timer);
   }, [status, delayMs]);
 
-  function readToken(): string | null {
+  // Stable identity so SessionCatalog does not remount-fetch on every parent render.
+  const readToken = useCallback((): string | null => {
     if (tokenRef.current) return tokenRef.current;
     const inspected = inspectPairingSearch(readLocation().origin, readLocation().search);
     if (inspected.kind === 'ok') {
@@ -106,7 +107,7 @@ export function PairingExperience({
       return inspected.token;
     }
     return null;
-  }
+  }, [readLocation]);
 
   async function onConnect(): Promise<void> {
     const token = readToken();

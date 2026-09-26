@@ -608,7 +608,8 @@ async function main() {
     );
     check('enroll reported the right display', enroll.payload?.display?.id === displayA.id);
 
-    const deviceSecretA = enroll.payload.device_secret;
+    const deviceSecretAInitial = enroll.payload.device_secret;
+    let deviceSecretA = deviceSecretAInitial;
 
     const replayEnroll = await postJson('/api/device/enroll', { code: enrollmentCode });
     check(
@@ -633,6 +634,44 @@ async function main() {
       .select('id', { count: 'exact', head: true })
       .eq('display_id', displayA.id);
     check('an installation record was opened', installCount === 1, `count ${installCount}`);
+
+    // ---------------------------------------------------------------- 4b
+    section('4b. Re-enroll revokes prior credential');
+    const reenrollCode = await issueCode(displayA.id, tenantA.staffUserId);
+    const reenroll = await postJson('/api/device/enroll', {
+      code: reenrollCode,
+      app_version: '1.2.3',
+    });
+    check('re-enroll returned 200', reenroll.status === 200, `status ${reenroll.status}`);
+    const deviceSecretAReplaced = reenroll.payload?.device_secret;
+    check(
+      're-enroll issued a new device secret',
+      typeof deviceSecretAReplaced === 'string' && deviceSecretAReplaced !== deviceSecretAInitial,
+    );
+
+    const { data: activeCreds } = await admin
+      .from('device_credentials')
+      .select('id')
+      .eq('display_id', displayA.id)
+      .is('revoked_at', null);
+    check(
+      'exactly one active credential remains after re-enroll',
+      activeCreds?.length === 1,
+      `count ${activeCreds?.length}`,
+    );
+
+    const oldSecretHeartbeat = await postJson(
+      '/api/device/heartbeat',
+      { camera_ok: true },
+      deviceSecretAInitial,
+    );
+    check(
+      'old secret is rejected after re-enroll',
+      oldSecretHeartbeat.status === 401,
+      `status ${oldSecretHeartbeat.status}`,
+    );
+
+    deviceSecretA = deviceSecretAReplaced;
 
     // ---------------------------------------------------------------- 5
     section('5. Heartbeat');
@@ -800,11 +839,22 @@ async function main() {
     );
     check("tenant B cannot activate tenant A's session", crossActivate.status === 400);
 
-    // a revoked credential must stop working
+    // a revoked credential must stop working and mark the display REVOKED
     await admin
       .from('device_credentials')
       .update({ revoked_at: new Date().toISOString() })
-      .eq('display_id', displayB.id);
+      .eq('display_id', displayB.id)
+      .is('revoked_at', null);
+    const { data: revokedDisplay } = await admin
+      .from('displays')
+      .select('status')
+      .eq('id', displayB.id)
+      .single();
+    check(
+      'revoking a credential sets displays.status to REVOKED',
+      revokedDisplay?.status === 'REVOKED',
+      `status ${revokedDisplay?.status}`,
+    );
     const revokedHeartbeat = await postJson(
       '/api/device/heartbeat',
       { camera_ok: true },

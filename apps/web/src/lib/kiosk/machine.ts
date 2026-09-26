@@ -73,7 +73,7 @@ export function presentKiosk(status: KioskStatus): KioskPresentation {
         status,
         title: 'MIRRORFIT AI',
         subtitle: 'Scan to Start',
-        honesty: 'Camera kiosk shell. Live garment fitting is not implemented yet.',
+        honesty: 'Camera ready. Scan to start a live pose-based garment try-on.',
         showQrPlaceholder: true,
       };
     case 'WAITING':
@@ -89,15 +89,16 @@ export function presentKiosk(status: KioskStatus): KioskPresentation {
         status,
         title: 'Connecting',
         subtitle: 'A phone claimed this session',
-        honesty: 'The mirror and phone are not exchanging fitting messages yet.',
+        honesty: 'Phone connected. Preparing the live try-on on this mirror.',
         showQrPlaceholder: false,
       };
     case 'ACTIVE':
       return {
         status,
         title: 'Session live',
-        subtitle: 'Camera preview only',
-        honesty: 'This is a local camera feed. It is not an AI try-on.',
+        subtitle: 'Live pose fitting',
+        honesty:
+          'Live pose landmarks place a garment overlay on this camera. Not a photorealistic AI try-on.',
         showQrPlaceholder: false,
       };
     case 'ENDED':

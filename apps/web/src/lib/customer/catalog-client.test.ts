@@ -123,4 +123,25 @@ describe('customer catalog client', () => {
     expect(body).not.toContain('organization_id');
     expect(headers).toMatchObject({ authorization: `Bearer ${TOKEN}` });
   });
+
+  it('returns null when the catalog request times out', async () => {
+    const items = await listSessionCatalog(
+      TOKEN,
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            const err = new Error('aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+        }),
+      20,
+    );
+    expect(items).toBeNull();
+  });
+
+  it('returns null on network failure', async () => {
+    const items = await listSessionCatalog(TOKEN, () => Promise.reject(new Error('offline')));
+    expect(items).toBeNull();
+  });
 });

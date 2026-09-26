@@ -60,6 +60,11 @@ security; treat it like a root password.
 
 CI runs format check, lint, typecheck, test and build on every pull request.
 
+## Operations
+
+- [Production deployment runbook](docs/production-deployment.md) — env names, migrations, TLS vs local CA, headers, rollback
+- [Kiosk operator runbook](docs/kiosk-runbook.md) — enroll, pair, recover, privacy
+
 ## Environment separation
 
 Two tiers, enforced in code rather than by convention:

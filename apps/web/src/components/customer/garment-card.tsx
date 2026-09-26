@@ -5,6 +5,9 @@ import { cn } from '@mirrorfit/ui';
 /**
  * Garment tile for the phone catalog. Callers pass copy they already have —
  * no invented product data, storage paths, or signed URLs.
+ *
+ * Optional `imageSrc` is for same-origin fixture cards (e.g. /fixtures/…);
+ * commercial cards may omit it until a safe public thumbnail exists.
  */
 export function GarmentCard({
   title,
@@ -12,6 +15,8 @@ export function GarmentCard({
   meta,
   selected = false,
   badge,
+  imageSrc,
+  imageAlt,
   children,
 }: {
   title: string;
@@ -19,6 +24,8 @@ export function GarmentCard({
   meta?: string;
   selected?: boolean;
   badge?: string | null;
+  imageSrc?: string | null;
+  imageAlt?: string;
   children?: ReactNode;
 }) {
   return (
@@ -31,11 +38,21 @@ export function GarmentCard({
       data-selected={selected ? 'true' : undefined}
     >
       <div
-        className="relative flex aspect-[3/4] items-end bg-[#ebe6dc] px-4 py-3"
-        aria-hidden={!badge}
+        className="relative flex aspect-[3/4] items-end overflow-hidden bg-[#ebe6dc] px-4 py-3"
+        aria-hidden={!badge && !imageSrc}
       >
+        {imageSrc ? (
+          // eslint-disable-next-line @next/next/no-img-element -- local fixture / same-origin static only
+          <img
+            src={imageSrc}
+            alt={imageAlt ?? ''}
+            className="absolute inset-0 size-full object-cover"
+            loading="lazy"
+            decoding="async"
+          />
+        ) : null}
         {badge ? (
-          <span className="rounded-full bg-customer-surface/90 px-3 py-1 text-[0.65rem] font-medium uppercase tracking-[0.18em] text-forest">
+          <span className="relative z-[1] rounded-full bg-customer-surface/90 px-3 py-1 text-[0.65rem] font-medium uppercase tracking-[0.18em] text-forest">
             {badge}
           </span>
         ) : null}

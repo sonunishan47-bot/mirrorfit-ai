@@ -64,7 +64,9 @@ export function projectCustomerCatalogItem(
     audience: null,
     sizes: [...(extras.sizesByGarmentId?.[parsedGarment.data.id] ?? [])],
     is_test_fixture: isTestFixtureCatalogName(parsedGarment.data.name),
-    has_thumbnail: extras.thumbnailGarmentIds?.has(parsedGarment.data.id) === true,
+    has_thumbnail:
+      isTestFixtureCatalogName(parsedGarment.data.name) ||
+      extras.thumbnailGarmentIds?.has(parsedGarment.data.id) === true,
     has_overlay:
       isTestFixtureCatalogName(parsedGarment.data.name) ||
       extras.overlayGarmentIds?.has(parsedGarment.data.id) === true,

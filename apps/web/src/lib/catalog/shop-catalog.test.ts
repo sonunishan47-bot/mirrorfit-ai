@@ -94,7 +94,7 @@ describe('catalog tenant isolation', () => {
     expect(items).toHaveLength(1);
     expect(items[0]?.is_test_fixture).toBe(true);
     expect(items[0]?.sizes).toEqual(['S', 'M', 'L']);
-    expect(items[0]?.has_thumbnail).toBe(false);
+    expect(items[0]?.has_thumbnail).toBe(true);
     expect(items[0]?.has_overlay).toBe(true);
     expect(items[0]?.fitting_available).toBe(true);
     expect(items[0]?.audience).toBeNull();
@@ -169,6 +169,36 @@ describe('catalog tenant isolation', () => {
   it('does not treat a commercial name as a test fixture', () => {
     expect(isTestFixtureCatalogName('Shop A tee')).toBe(false);
     expect(isTestFixtureCatalogName('TEST FIXTURE TOP')).toBe(true);
+    expect(isTestFixtureCatalogName('TEST FIXTURE PANTS')).toBe(true);
+  });
+
+  it('marks TEST FIXTURE PANTS as a selectable LOWER_BODY fixture with overlay availability', () => {
+    const items = filterCatalogForShop(
+      [
+        {
+          ...garment(GARMENT_A, ORG_A, SHOP_A, 'TEST FIXTURE PANTS'),
+          category: 'Pants',
+          brand: 'TEST FIXTURE',
+        },
+      ],
+      [
+        {
+          id: VARIANT_A,
+          garment_id: GARMENT_A,
+          organization_id: ORG_A,
+          shop_id: SHOP_A,
+          color_name: 'Fixture Navy',
+          is_active: true,
+        },
+      ],
+      { organizationId: ORG_A, shopId: SHOP_A },
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0]?.is_test_fixture).toBe(true);
+    expect(items[0]?.has_overlay).toBe(true);
+    expect(items[0]?.has_thumbnail).toBe(true);
+    expect(items[0]?.fitting_available).toBe(true);
+    expect(items[0]?.category).toBe('Pants');
   });
 
   it('never projects organization or storage fields onto the phone', () => {

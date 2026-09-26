@@ -348,7 +348,11 @@ export function KioskShell() {
           setStatus((current) => reduceKiosk(current, 'SESSION_ENDED'));
         }
       } catch {
-        // A poll failure is not a session end. The next tick retries.
+        // Transient poll / auth errors are not session end. Skip counting a
+        // failure if a newer generation already replaced this poll's epoch
+        // (overlapping 1s polls after END → create).
+        if (cancelled) return;
+        if (life.getGeneration() !== generation) return;
         pollResilienceRef.current = notePollFailure(pollResilienceRef.current, Date.now());
         setPollHealth(pollResilienceRef.current.health);
       }

@@ -14,17 +14,31 @@ export interface CustomerCatalogItem {
   readonly currencyCode: string | null;
 }
 
+/** Abort a hung catalog poll so the phone cannot spin forever on a dead LAN. */
+export const CATALOG_FETCH_TIMEOUT_MS = 12_000;
+
 export async function listSessionCatalog(
   token: string,
   fetchFn: typeof fetch = fetch,
+  timeoutMs: number = CATALOG_FETCH_TIMEOUT_MS,
 ): Promise<CustomerCatalogItem[] | null> {
   let response: Response;
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer =
+    controller && timeoutMs > 0
+      ? setTimeout(() => {
+          controller.abort();
+        }, timeoutMs)
+      : null;
   try {
     response = await fetchFn('/api/session/catalog', {
       headers: { authorization: `Bearer ${token}` },
+      ...(controller ? { signal: controller.signal } : {}),
     });
   } catch {
     return null;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
   if (!response.ok) return null;
   const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;

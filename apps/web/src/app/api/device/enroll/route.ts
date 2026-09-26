@@ -40,9 +40,11 @@ export async function POST(request: Request): Promise<NextResponse> {
   const secret = generateDeviceSecret();
   const supabase = createSupabaseAdminClient();
 
-  // One transactional call. It claims the code, mints the credential, marks
-  // the display online and opens the installation record together, so a
-  // failure part-way through leaves no credential behind.
+  // One transactional call. It claims the code, revokes any prior active
+  // credential for the same display, mints the replacement (hash only),
+  // marks the display online and opens the installation record together.
+  // A failure part-way through rolls back — including the revoke — so a
+  // failed re-enroll cannot lock out a still-working mirror.
   const { data, error } = await supabase.rpc('claim_device_enrollment_code', {
     p_code_hash: sha256Hex(parsed.data.code),
     p_secret_hash: sha256Hex(secret),
