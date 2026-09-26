@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { FrameRateCounter } from '@mirrorfit/tryon-core';
 
@@ -16,13 +16,21 @@ import { noteCameraFrame } from '@/lib/kiosk/fps';
 import { presentKiosk, reduceKiosk, type KioskStatus } from '@/lib/kiosk/machine';
 import { pairingQrValue } from '@/lib/kiosk/pairing-qr';
 import {
+  DEFAULT_POWER_SAVE_IDLE_MS,
+  evaluatePowerSave,
+  shouldRunTryOnPipeline,
+  shouldShowScreensaver,
+  type PowerSavePhase,
+} from '@/lib/kiosk/power-save';
+import {
   activateKioskSession,
   createKioskSession,
   endKioskSession,
   enrollDevice,
-  eventFromLiveSession,
   readLiveSession,
 } from '@/lib/kiosk/session-client';
+import { createSessionLifecycle } from '@/lib/kiosk/session-lifecycle';
+import { KioskScreensaver } from './kiosk-screensaver';
 import { TryOnPanel } from './tryon-panel';
 import { UnenrolledPanel } from './unenrolled-panel';
 
@@ -30,6 +38,9 @@ const CAMERA_CONSTRAINTS = { width: 1920, height: 1080, frameRate: 30 } as const
 const CAMERA_START_MS = 8_000;
 const POLL_MS = 1000;
 const RESET_MS = 1600;
+const POWER_SAVE_TICK_MS = 1_000;
+/** While power-saving, FPS sample pump runs at a low cadence instead of every RAF. */
+const POWER_SAVE_FPS_MS = 2_000;
 
 type CameraStatus = 'starting' | 'live' | 'unavailable';
 
@@ -39,14 +50,22 @@ type CameraStatus = 'starting' | 'live' | 'unavailable';
  * Camera frames stay in the local `<video>` element. The QR encodes only
  * `/s?t=…`. The device secret is read from local persistence and sent as a
  * bearer header; it is never rendered.
+ *
+ * Session open / poll / end races are owned by `createSessionLifecycle`
+ * (generation epoch). Effects here only wire HTTP and React state.
+ *
+ * Power-save is orthogonal to the session machine: after prolonged inactivity
+ * MediaPipe try-on pauses and a branded screensaver covers the glass until
+ * a claim, presence, or pointer wake.
  */
 export function KioskShell() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const cameraRef = useRef<BrowserCameraProvider | null>(null);
   const fpsRef = useRef(new FrameRateCounter());
   const statusRef = useRef<KioskStatus>('IDLE');
-  const sessionIdRef = useRef<string | null>(null);
-  const openingRef = useRef(false);
+  const lifecycleRef = useRef(createSessionLifecycle());
+  const lastActivityRef = useRef(Date.now());
+  const powerPhaseRef = useRef<PowerSavePhase>('awake');
 
   const [device, setDevice] = useState<StoredDeviceCredential | null>(null);
   const [status, setStatus] = useState<KioskStatus>('IDLE');
@@ -55,6 +74,7 @@ export function KioskShell() {
   const [qrSvg, setQrSvg] = useState<string | null>(null);
   const [enrollError, setEnrollError] = useState<string | null>(null);
   const [openAttempt, setOpenAttempt] = useState(0);
+  const [powerPhase, setPowerPhase] = useState<PowerSavePhase>('awake');
   const [selectedGarment, setSelectedGarment] = useState<{
     garmentId: string;
     variantId: string;
@@ -64,14 +84,64 @@ export function KioskShell() {
 
   const view = presentKiosk(status);
   const qrValue = pairingQrValue(pairingUrl, device?.deviceSecret ?? null);
+  const showScreensaver = shouldShowScreensaver(status, powerPhase);
+  const tryOnActive = shouldRunTryOnPipeline(status, powerPhase);
+
+  const noteActivity = useCallback((wake = true) => {
+    lastActivityRef.current = Date.now();
+    if (wake && powerPhaseRef.current === 'saving') {
+      powerPhaseRef.current = 'awake';
+      setPowerPhase('awake');
+    }
+  }, []);
 
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
 
   useEffect(() => {
+    powerPhaseRef.current = powerPhase;
+  }, [powerPhase]);
+
+  useEffect(() => {
     setDevice(loadDeviceCredential());
   }, []);
+
+  // Presence / claim / garment changes count as activity.
+  useEffect(() => {
+    noteActivity(true);
+  }, [status, selectedGarment, noteActivity]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const wake = () => noteActivity(true);
+    window.addEventListener('pointerdown', wake);
+    window.addEventListener('keydown', wake);
+    window.addEventListener('touchstart', wake, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', wake);
+      window.removeEventListener('keydown', wake);
+      window.removeEventListener('touchstart', wake);
+    };
+  }, [noteActivity]);
+
+  useEffect(() => {
+    if (!device) return;
+    const tick = window.setInterval(() => {
+      const next = evaluatePowerSave({
+        phase: powerPhaseRef.current,
+        nowMs: Date.now(),
+        lastActivityMs: lastActivityRef.current,
+        idleMs: DEFAULT_POWER_SAVE_IDLE_MS,
+        kioskStatus: statusRef.current,
+      });
+      if (next !== powerPhaseRef.current) {
+        powerPhaseRef.current = next;
+        setPowerPhase(next);
+      }
+    }, POWER_SAVE_TICK_MS);
+    return () => window.clearInterval(tick);
+  }, [device]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -85,24 +155,17 @@ export function KioskShell() {
     fpsRef.current.reset();
 
     let cancelled = false;
-    let raf = 0;
     const startWatch = window.setTimeout(() => {
       if (!cancelled) {
         setCamera((current) => (current === 'starting' ? 'unavailable' : current));
       }
     }, CAMERA_START_MS);
 
-    const pump = () => {
-      noteCameraFrame(fpsRef.current, cameraRef.current?.readFrame() ?? null);
-      raf = window.requestAnimationFrame(pump);
-    };
-
     void provider
       .start(CAMERA_CONSTRAINTS)
       .then(() => {
         if (cancelled) return;
         setCamera('live');
-        raf = window.requestAnimationFrame(pump);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -113,11 +176,34 @@ export function KioskShell() {
     return () => {
       cancelled = true;
       window.clearTimeout(startWatch);
-      window.cancelAnimationFrame(raf);
       cameraRef.current = null;
       void provider.dispose();
     };
   }, []);
+
+  // Frame sample pump: full RAF while awake, throttled interval while power-saving.
+  useEffect(() => {
+    if (camera !== 'live') return;
+    let raf = 0;
+    let fpsTimer = 0;
+    const sampleFrame = () => {
+      noteCameraFrame(fpsRef.current, cameraRef.current?.readFrame() ?? null);
+    };
+    const pumpRaf = () => {
+      sampleFrame();
+      raf = window.requestAnimationFrame(pumpRaf);
+    };
+    if (powerPhase === 'saving') {
+      sampleFrame();
+      fpsTimer = window.setInterval(sampleFrame, POWER_SAVE_FPS_MS);
+    } else {
+      raf = window.requestAnimationFrame(pumpRaf);
+    }
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.clearInterval(fpsTimer);
+    };
+  }, [powerPhase, camera]);
 
   useEffect(() => {
     if (!device) return;
@@ -132,7 +218,8 @@ export function KioskShell() {
       onUnauthorized: () => {
         clearDeviceCredential();
         setDevice(null);
-        clearSession();
+        lifecycleRef.current.markSessionEnded();
+        clearSessionUi();
         setStatus('IDLE');
       },
     });
@@ -143,32 +230,36 @@ export function KioskShell() {
 
   useEffect(() => {
     if (!device || status !== 'IDLE') return;
-    if (openingRef.current) return;
-    openingRef.current = true;
+    const life = lifecycleRef.current;
+    const openSeq = life.beginOpen(status);
+    if (openSeq === null) return;
     let cancelled = false;
 
     void createKioskSession(device.deviceSecret)
       .then((created) => {
-        if (cancelled) return;
-        sessionIdRef.current = created.sessionId;
+        if (cancelled) {
+          life.failOpen(openSeq);
+          return;
+        }
+        if (life.completeOpen(openSeq, created.sessionId) === null) return;
         setPairingUrl(created.pairingUrl);
         setStatus((current) => reduceKiosk(current, 'SESSION_OPENED'));
+        noteActivity(true);
       })
       .catch(() => {
+        life.failOpen(openSeq);
         if (cancelled) return;
         setPairingUrl(null);
         window.setTimeout(() => {
           if (!cancelled) setOpenAttempt((n) => n + 1);
         }, 5000);
-      })
-      .finally(() => {
-        openingRef.current = false;
       });
 
     return () => {
       cancelled = true;
+      life.failOpen(openSeq);
     };
-  }, [device, status, openAttempt]);
+  }, [device, status, openAttempt, noteActivity]);
 
   useEffect(() => {
     if (!device) return;
@@ -176,13 +267,16 @@ export function KioskShell() {
 
     const poll = window.setInterval(() => {
       void (async () => {
-        const sessionId = sessionIdRef.current;
+        const life = lifecycleRef.current;
+        const { generation, sessionId } = life.beginPoll();
         if (!sessionId) return;
         try {
           const live = await readLiveSession(device.deviceSecret);
-          const event = eventFromLiveSession(live, sessionId, Date.now());
-          if (live?.selectedGarment !== undefined) {
-            const next = live.selectedGarment;
+          const applied = life.applyPoll(generation, live, Date.now());
+          if (applied.kind === 'stale') return;
+
+          if (applied.live?.selectedGarment !== undefined) {
+            const next = applied.live.selectedGarment;
             setSelectedGarment((current) => {
               if (!next && !current) return current;
               if (
@@ -196,19 +290,23 @@ export function KioskShell() {
               return next ?? null;
             });
           }
+
+          const event = applied.event;
           if (event === 'PAIRING_CLAIMED' && statusRef.current === 'WAITING') {
+            noteActivity(true);
             setPairingUrl(null);
             setStatus((current) => reduceKiosk(current, 'PAIRING_CLAIMED'));
-            if (live?.status === 'ACTIVE') {
+            if (applied.live?.status === 'ACTIVE') {
               setStatus((current) => reduceKiosk(current, 'SESSION_ACTIVATED'));
               return;
             }
             const ok = await activateKioskSession(device.deviceSecret, sessionId);
-            if (ok) {
+            if (ok && life.getSessionId() === sessionId) {
               setStatus((current) => reduceKiosk(current, 'SESSION_ACTIVATED'));
             }
           } else if (event === 'SESSION_ENDED') {
-            clearSession();
+            life.markSessionEnded();
+            clearSessionUi();
             setStatus((current) => reduceKiosk(current, 'SESSION_ENDED'));
           }
         } catch {
@@ -218,7 +316,7 @@ export function KioskShell() {
     }, POLL_MS);
 
     return () => window.clearInterval(poll);
-  }, [device, status]);
+  }, [device, status, noteActivity]);
 
   useEffect(() => {
     if (status !== 'ENDED') return;
@@ -248,8 +346,7 @@ export function KioskShell() {
     };
   }, [qrValue, device]);
 
-  function clearSession(): void {
-    sessionIdRef.current = null;
+  function clearSessionUi(): void {
     setPairingUrl(null);
     setQrSvg(null);
     setSelectedGarment(null);
@@ -262,19 +359,23 @@ export function KioskShell() {
       const enrolled = await enrollDevice(code);
       saveDeviceCredential(enrolled);
       setDevice(enrolled);
+      noteActivity(true);
     } catch {
       setEnrollError('That code could not be used. Ask staff for a new one.');
     }
   }
 
   async function onEndSession(): Promise<void> {
-    const sessionId = sessionIdRef.current;
+    const life = lifecycleRef.current;
+    const sessionId = life.getSessionId();
     const secret = device?.deviceSecret;
     if (sessionId && secret) {
       await endKioskSession(secret, sessionId, 'CUSTOMER_ENDED');
     }
-    clearSession();
+    life.markSessionEnded();
+    clearSessionUi();
     setStatus((current) => reduceKiosk(current, 'SESSION_ENDED'));
+    noteActivity(true);
   }
 
   return (
@@ -282,13 +383,26 @@ export function KioskShell() {
       <video
         ref={videoRef}
         className="absolute inset-0 size-full object-cover"
-        style={{ transform: 'scaleX(-1)' }}
+        style={{
+          transform: 'scaleX(-1)',
+          opacity: showScreensaver ? 0.15 : 1,
+          transition: 'opacity 200ms ease',
+        }}
         muted
         playsInline
         autoPlay
         aria-hidden
       />
       <div className="absolute inset-0 bg-base/40" />
+
+      {showScreensaver ? (
+        <KioskScreensaver
+          qrSvg={qrSvg}
+          showQr={status === 'WAITING' || status === 'IDLE'}
+          activeSession={status === 'ACTIVE'}
+          onWake={() => noteActivity(true)}
+        />
+      ) : null}
 
       <div className="relative z-10 flex min-h-dvh flex-col justify-between px-10 py-12">
         <p className="text-xs uppercase tracking-[0.4em] text-accent">In-store kiosk</p>
@@ -310,7 +424,6 @@ export function KioskShell() {
                   <div
                     className="size-56 overflow-hidden rounded-lg bg-white p-3"
                     data-testid="pairing-qr"
-                    // The SVG is produced locally from a pairing URL we already validated.
                     dangerouslySetInnerHTML={{ __html: qrSvg }}
                   />
                 ) : (
@@ -330,11 +443,14 @@ export function KioskShell() {
 
               {status === 'ACTIVE' ? (
                 <TryOnPanel
-                  active
+                  active={tryOnActive}
                   getFrame={() => cameraRef.current?.readFrame() ?? null}
                   selectedGarment={selectedGarment}
                   selectedCategory={selectedGarment?.category ?? null}
                   selectedIsTestFixture={selectedGarment?.isTestFixture === true}
+                  onPresenceChange={(present) => {
+                    if (present) noteActivity(true);
+                  }}
                 />
               ) : null}
 
@@ -356,12 +472,16 @@ export function KioskShell() {
         <footer className="flex items-end justify-between gap-6 text-xs text-muted">
           <p>
             {camera === 'live'
-              ? 'Camera on this device. Frames stay here.'
+              ? showScreensaver
+                ? 'Camera idle · pose processing paused to save power.'
+                : 'Camera on this device. Frames stay here.'
               : camera === 'starting'
                 ? 'Starting camera…'
                 : 'Camera unavailable. This screen will not invent a feed.'}
           </p>
-          <p className="uppercase tracking-[0.25em]">{device ? view.status : 'UNENROLLED'}</p>
+          <p className="uppercase tracking-[0.25em]">
+            {device ? (showScreensaver ? `${view.status} · POWER SAVE` : view.status) : 'UNENROLLED'}
+          </p>
         </footer>
       </div>
     </main>
