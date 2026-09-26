@@ -4,6 +4,7 @@ import { deriveBodyGeometry } from './body-geometry';
 import type { PoseFrame } from './geometry';
 import { deriveLowerBodyGeometry } from './lower-body-geometry';
 import {
+  drawImageInParallelogram,
   lowerBodyWarpParallelogram,
   torsoWarpParallelogram,
 } from './pose-warp';
@@ -77,5 +78,66 @@ describe('pose-warp parallelograms', () => {
         ],
       }),
     ).toBeNull();
+  });
+});
+
+describe('drawImageInParallelogram', () => {
+  it('maps the unit square onto the parallelogram (does not double-scale by edge length)', () => {
+    const geometry = deriveBodyGeometry(TOP_POSE);
+    expect(geometry).not.toBeNull();
+    const quad = torsoWarpParallelogram(geometry!);
+    expect(quad).not.toBeNull();
+
+    const canvasWidth = 1000;
+    const canvasHeight = 1000;
+    const tl = {
+      x: quad!.topLeft.x * canvasWidth,
+      y: quad!.topLeft.y * canvasHeight,
+    };
+    const tr = {
+      x: quad!.topRight.x * canvasWidth,
+      y: quad!.topRight.y * canvasHeight,
+    };
+    const bl = {
+      x: quad!.bottomLeft.x * canvasWidth,
+      y: quad!.bottomLeft.y * canvasHeight,
+    };
+
+    let transform: number[] | null = null;
+    let drawArgs: unknown[] | null = null;
+    const context = {
+      save: () => undefined,
+      restore: () => undefined,
+      setTransform: (...args: number[]) => {
+        transform = args;
+      },
+      drawImage: (...args: unknown[]) => {
+        drawArgs = args;
+      },
+      imageSmoothingEnabled: true,
+      imageSmoothingQuality: 'high',
+      globalAlpha: 1,
+    } as unknown as CanvasRenderingContext2D;
+
+    const bitmap = { width: 200, height: 280 } as CanvasImageSource;
+    const ok = drawImageInParallelogram(
+      context,
+      bitmap,
+      quad!,
+      canvasWidth,
+      canvasHeight,
+      1,
+    );
+    expect(ok).toBe(true);
+    expect(transform).not.toBeNull();
+    // a,b = top edge; c,d = left edge; e,f = top-left — unit square → parallelogram.
+    expect(transform![0]).toBeCloseTo(tr.x - tl.x);
+    expect(transform![1]).toBeCloseTo(tr.y - tl.y);
+    expect(transform![2]).toBeCloseTo(bl.x - tl.x);
+    expect(transform![3]).toBeCloseTo(bl.y - tl.y);
+    expect(transform![4]).toBeCloseTo(tl.x);
+    expect(transform![5]).toBeCloseTo(tl.y);
+    // Destination must be the unit square. Drawing w×h here was the physical bug.
+    expect(drawArgs).toEqual([bitmap, 0, 0, 200, 280, 0, 0, 1, 1]);
   });
 });

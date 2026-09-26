@@ -6,6 +6,7 @@ import { FrameRateCounter, resolveFitCategory } from '@mirrorfit/tryon-core';
 
 import { ClientErrorBoundary } from '@/components/client-error-boundary';
 import { BrowserCameraProvider } from '@/lib/camera/browser-camera';
+import { resolveCameraPresence } from '@/lib/camera/camera-presence';
 import { startHeartbeatLoop } from '@/lib/device/heartbeat-loop';
 import {
   clearDeviceCredential,
@@ -89,6 +90,7 @@ export function KioskShell() {
   const [enrollError, setEnrollError] = useState<string | null>(null);
   const [openAttempt, setOpenAttempt] = useState(0);
   const [powerPhase, setPowerPhase] = useState<PowerSavePhase>('awake');
+  const [overlayRoot, setOverlayRoot] = useState<HTMLDivElement | null>(null);
   const [selectedGarment, setSelectedGarment] = useState<{
     garmentId: string;
     variantId: string;
@@ -100,6 +102,10 @@ export function KioskShell() {
   const qrValue = pairingQrValue(pairingUrl, device?.deviceSecret ?? null);
   const showScreensaver = shouldShowScreensaver(status, powerPhase);
   const tryOnActive = shouldRunTryOnPipeline(status, powerPhase);
+  const cameraPresence = resolveCameraPresence({
+    flag: camera,
+    video: videoRef.current,
+  });
 
   const noteActivity = useCallback((wake = true) => {
     lastActivityRef.current = Date.now();
@@ -186,10 +192,24 @@ export function KioskShell() {
     fpsRef.current.reset();
 
     let cancelled = false;
-    const startWatch = window.setTimeout(() => {
-      if (!cancelled) {
-        setCamera((current) => (current === 'starting' ? 'unavailable' : current));
+    const syncLiveFromElement = () => {
+      if (cancelled) return;
+      if (video.srcObject && video.videoWidth > 0 && video.videoHeight > 0) {
+        setCamera('live');
       }
+    };
+    video.addEventListener('loadedmetadata', syncLiveFromElement);
+    video.addEventListener('playing', syncLiveFromElement);
+
+    const startWatch = window.setTimeout(() => {
+      if (cancelled) return;
+      // Prefer the real element: start() may still be awaiting play while the
+      // feed is already attached and sized (false "unavailable" previously).
+      if (video.videoWidth > 0 && video.videoHeight > 0 && video.srcObject) {
+        setCamera('live');
+        return;
+      }
+      setCamera((current) => (current === 'starting' ? 'unavailable' : current));
     }, CAMERA_START_MS);
 
     void provider
@@ -201,12 +221,19 @@ export function KioskShell() {
       .catch((error: unknown) => {
         if (cancelled) return;
         if (error instanceof Error && error.message.includes('cancelled')) return;
+        // Only mark unavailable when the element truly has no feed.
+        if (video.srcObject && video.videoWidth > 0 && video.videoHeight > 0) {
+          setCamera('live');
+          return;
+        }
         setCamera('unavailable');
       });
 
     return () => {
       cancelled = true;
       window.clearTimeout(startWatch);
+      video.removeEventListener('loadedmetadata', syncLiveFromElement);
+      video.removeEventListener('playing', syncLiveFromElement);
       cameraRef.current = null;
       void provider.dispose();
     };
@@ -242,7 +269,7 @@ export function KioskShell() {
     const loop = startHeartbeatLoop({
       getSecret: () => loadDeviceCredential()?.deviceSecret ?? null,
       getSample: () => ({
-        camera_ok: camera === 'live',
+        camera_ok: cameraPresence === 'live' || camera === 'live',
         render_fps: fpsRef.current.fps(),
         metrics: analyticsRef.current.toHeartbeatMetrics(),
       }),
@@ -456,7 +483,7 @@ export function KioskShell() {
     <main className="relative min-h-dvh overflow-hidden bg-base text-primary">
       <video
         ref={videoRef}
-        className="absolute inset-0 size-full object-cover"
+        className="absolute inset-0 z-0 size-full object-cover"
         style={{
           transform: 'scaleX(-1)',
           opacity: showScreensaver ? 0.15 : 1,
@@ -467,7 +494,15 @@ export function KioskShell() {
         autoPlay
         aria-hidden
       />
-      <div className="absolute inset-0 bg-base/40" />
+      {/* Dims the camera only — translucent; must stay below the try-on overlay. */}
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-base/40" aria-hidden />
+      {/* Full-bleed garment overlay host (transparent; above video + scrim, below UI). */}
+      <div
+        ref={setOverlayRoot}
+        className="pointer-events-none absolute inset-0 z-[2] bg-transparent"
+        data-testid="tryon-overlay-host"
+        aria-hidden
+      />
 
       {showScreensaver ? (
         <KioskScreensaver
@@ -520,7 +555,7 @@ export function KioskShell() {
                 </p>
               ) : null}
 
-              {status === 'ACTIVE' ? (
+              {status === 'ACTIVE' && overlayRoot ? (
                 <ClientErrorBoundary
                   title="Try-on panel"
                   body="Pose rendering hit an error. Camera preview continues; tap try again to reload fitting."
@@ -530,6 +565,7 @@ export function KioskShell() {
                 >
                   <TryOnPanel
                     active={tryOnActive}
+                    overlayRoot={overlayRoot}
                     getFrame={() => cameraRef.current?.readFrame() ?? null}
                     selectedGarment={selectedGarment}
                     selectedCategory={selectedGarment?.category ?? null}
@@ -561,11 +597,11 @@ export function KioskShell() {
 
         <footer className="flex items-end justify-between gap-6 text-xs text-muted">
           <p>
-            {camera === 'live'
+            {cameraPresence === 'live'
               ? showScreensaver
                 ? 'Camera idle · pose processing paused to save power.'
                 : 'Camera on this device. Frames stay here.'
-              : camera === 'starting'
+              : cameraPresence === 'starting'
                 ? 'Starting camera…'
                 : 'Camera unavailable. This screen will not invent a feed.'}
           </p>

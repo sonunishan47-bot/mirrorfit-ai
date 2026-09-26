@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import {
   AsyncTryOnQueue,
@@ -61,6 +62,8 @@ export function TryOnPanel({
   selectedCategory,
   selectedIsTestFixture = false,
   onPresenceChange,
+  /** Full-bleed host above the camera (and above the dim scrim). */
+  overlayRoot = null,
 }: {
   active: boolean;
   getFrame: () => CameraFrame | null;
@@ -69,6 +72,7 @@ export function TryOnPanel({
   selectedIsTestFixture?: boolean;
   /** Optional wake signal for kiosk power-save — person seen / lost only. */
   onPresenceChange?: (present: boolean) => void;
+  overlayRoot?: HTMLElement | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const getFrameRef = useRef(getFrame);
@@ -524,15 +528,20 @@ export function TryOnPanel({
                   ? 'POSE INITIALIZING'
                   : view.label;
 
+  const overlayCanvas = (
+    <canvas
+      ref={canvasRef}
+      className="pointer-events-none absolute inset-0 size-full bg-transparent object-cover"
+      style={{ transform: 'scaleX(-1)', backgroundColor: 'transparent' }}
+      aria-hidden
+      data-testid="tryon-overlay-canvas"
+    />
+  );
+
   return (
     <>
-      <canvas
-        ref={canvasRef}
-        className="pointer-events-none fixed inset-0 z-[1] size-full object-cover"
-        style={{ transform: 'scaleX(-1)' }}
-        aria-hidden
-      />
-      <p className="max-w-md text-sm text-muted" data-testid="tryon-status">
+      {overlayRoot ? createPortal(overlayCanvas, overlayRoot) : overlayCanvas}
+      <p className="relative z-[2] max-w-md text-sm text-muted" data-testid="tryon-status">
         {layer}. {view.honesty}
         {reason ? ` ${reason}` : ''}
         {selectedGarment

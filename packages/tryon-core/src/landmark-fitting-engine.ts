@@ -1,7 +1,10 @@
+import type { GarmentFitCategory } from '@mirrorfit/types';
+
 import type { BodyGeometry, FittingResult, PoseFrame } from './geometry';
 import { deriveBodyGeometry } from './body-geometry';
 import { resolveFitCategory } from './fit-category';
 import { deriveLowerBodyGeometry } from './lower-body-geometry';
+import { keypointByName } from './parse-pose';
 import type { FittingInput, GarmentFittingEngine } from './providers';
 
 export interface GarmentFitRequest {
@@ -171,21 +174,26 @@ export function fitFromPose(
   if (!garment) return { fit: null, status: 'not_ready' };
   const family = resolveFitCategory(garment.category);
   if (family === null) return { fit: null, status: 'not_ready' };
-  if (pose.confidence < MIN_POSE_CONFIDENCE) {
+  // Use joints required for this family — not the mean of every mapped
+  // landmark. Low-visibility ankles/wrists were diluting pose.confidence
+  // below MIN_POSE_CONFIDENCE even when shoulders+hips were ready.
+  const jointConfidence = fittingJointConfidence(pose, family);
+  if (jointConfidence < MIN_POSE_CONFIDENCE) {
     return { fit: null, status: 'not_ready' };
   }
 
   if (family === 'LOWER_BODY') {
-    return fitLowerBodyFromPose(pose, garment, options);
+    return fitLowerBodyFromPose(pose, garment, options, jointConfidence);
   }
 
-  return fitTopFromPose(pose, geometry, options);
+  return fitTopFromPose(pose, geometry, options, jointConfidence);
 }
 
 function fitTopFromPose(
   pose: PoseFrame,
   geometry: BodyGeometry | null,
-  options?: FitFromPoseOptions,
+  options: FitFromPoseOptions | undefined,
+  jointConfidence: number,
 ): { fit: FittingResult | null; status: FitStatus } {
   if (!geometry) {
     return { fit: null, status: 'not_ready' };
@@ -236,7 +244,7 @@ function fitTopFromPose(
       scaleY: geometry.torsoHeight * TOP_HEIGHT_FACTOR,
       rotation: geometry.roll,
     },
-    confidence: Math.min(pose.confidence, 1),
+    confidence: Math.min(jointConfidence, 1),
   };
 
   const fit = smoothFit(raw, options?.previous ?? null, resolveSmoothing(options));
@@ -246,7 +254,8 @@ function fitTopFromPose(
 function fitLowerBodyFromPose(
   pose: PoseFrame,
   _garment: GarmentFitRequest,
-  options?: FitFromPoseOptions,
+  options: FitFromPoseOptions | undefined,
+  jointConfidence: number,
 ): { fit: FittingResult | null; status: FitStatus } {
   const lower = deriveLowerBodyGeometry(pose);
   if (!lower) {
@@ -279,11 +288,48 @@ function fitLowerBodyFromPose(
       scaleY: lower.legLength * LOWER_HEIGHT_FACTOR,
       rotation: lower.hipRoll,
     },
-    confidence: Math.min(pose.confidence, 1),
+    confidence: Math.min(jointConfidence, 1),
   };
 
   const fit = smoothFit(raw, options?.previous ?? null, resolveSmoothing(options));
   return { status: 'ready', fit };
+}
+
+/**
+ * Minimum confidence among joints required for the active fit family.
+ * Missing joints yield 0 — callers treat that as not ready.
+ */
+export function fittingJointConfidence(
+  pose: PoseFrame,
+  family: GarmentFitCategory,
+): number {
+  if (family === 'TOP') {
+    const joints = [
+      keypointByName(pose, 'LEFT_SHOULDER'),
+      keypointByName(pose, 'RIGHT_SHOULDER'),
+      keypointByName(pose, 'LEFT_HIP'),
+      keypointByName(pose, 'RIGHT_HIP'),
+    ];
+    if (joints.some((joint) => joint === null)) return 0;
+    return Math.min(...joints.map((joint) => joint!.confidence));
+  }
+  if (family === 'LOWER_BODY') {
+    const hips = [keypointByName(pose, 'LEFT_HIP'), keypointByName(pose, 'RIGHT_HIP')];
+    if (hips.some((joint) => joint === null)) return 0;
+    const distal = [
+      keypointByName(pose, 'LEFT_ANKLE'),
+      keypointByName(pose, 'RIGHT_ANKLE'),
+      keypointByName(pose, 'LEFT_KNEE'),
+      keypointByName(pose, 'RIGHT_KNEE'),
+    ].filter((joint): joint is NonNullable<typeof joint> => joint !== null);
+    if (distal.length < 2) return 0;
+    return Math.min(
+      hips[0]!.confidence,
+      hips[1]!.confidence,
+      ...distal.map((joint) => joint.confidence),
+    );
+  }
+  return 0;
 }
 
 /**

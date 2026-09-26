@@ -51,12 +51,12 @@ describe('poseFrameFromMediaPipe', () => {
     expect(poseFrameFromMediaPipe([], 1)).toBeNull();
   });
 
-  it('drops NaN, Infinity, and out-of-range coordinates instead of inventing them', () => {
+  it('drops NaN, Infinity, and wildly out-of-frame coordinates instead of inventing them', () => {
     const frame = poseFrameFromMediaPipe(
       blazePose({
         11: { x: Number.NaN, visibility: 0.9 },
         12: { x: Number.POSITIVE_INFINITY, visibility: 0.9 },
-        23: { y: -0.2, visibility: 0.9 },
+        23: { y: -0.8, visibility: 0.9 },
         24: { visibility: Number.NaN },
       }),
       10,
@@ -66,6 +66,18 @@ describe('poseFrameFromMediaPipe', () => {
     expect(names).not.toContain('RIGHT_SHOULDER');
     expect(names).not.toContain('LEFT_HIP');
     expect(names).not.toContain('RIGHT_HIP');
+  });
+
+  it('keeps hips detected slightly past the frame edge so TOP geometry can form', () => {
+    const frame = poseFrameFromMediaPipe(
+      blazePose({
+        23: { x: 0.4, y: 1.08, z: 0, visibility: 0.9 },
+        24: { x: 0.6, y: 1.06, z: 0, visibility: 0.88 },
+      }),
+      20,
+    );
+    expect(frame?.keypoints.find((point) => point.name === 'LEFT_HIP')?.y).toBe(1.08);
+    expect(frame?.keypoints.find((point) => point.name === 'RIGHT_HIP')?.y).toBe(1.06);
   });
 
   it('returns null when every mapped point is invalid', () => {

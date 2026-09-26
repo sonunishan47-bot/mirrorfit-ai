@@ -268,6 +268,22 @@ describe('landmark fitting', () => {
     ).toBeNull();
   });
 
+  it('derives TOP geometry when hips sit slightly past the frame edge', () => {
+    const geometry = deriveBodyGeometry({
+      timestampMs: 11,
+      confidence: 0.5,
+      keypoints: [
+        { name: 'LEFT_SHOULDER', x: 0.35, y: 0.28, z: null, confidence: 0.9 },
+        { name: 'RIGHT_SHOULDER', x: 0.65, y: 0.28, z: null, confidence: 0.9 },
+        { name: 'LEFT_HIP', x: 0.4, y: 1.05, z: null, confidence: 0.85 },
+        { name: 'RIGHT_HIP', x: 0.6, y: 1.04, z: null, confidence: 0.84 },
+      ],
+    });
+    expect(geometry).not.toBeNull();
+    expect(geometry!.torsoHeight).toBeGreaterThan(0.5);
+    expect(geometry!.hipCenter.y).toBeGreaterThan(1);
+  });
+
   it('returns null when required landmarks are below the confidence floor', () => {
     expect(
       deriveBodyGeometry({
@@ -330,6 +346,36 @@ describe('landmark fitting', () => {
     ).toBeNull();
   });
 
+  it('fits TOP from joint confidence even when low-visibility extremities dilute pose.confidence', async () => {
+    const engine = new LandmarkFittingEngine();
+    engine.setAnchorMode('shoulders');
+    await engine.loadGarment('g1', 'v1', 'Tops');
+    const pose: PoseFrame = {
+      timestampMs: 9,
+      // Diluted by ankles/wrists — previously blocked fitting at MIN_POSE_CONFIDENCE.
+      confidence: 0.12,
+      keypoints: [
+        { name: 'LEFT_SHOULDER', x: 0.35, y: 0.3, z: null, confidence: 0.92 },
+        { name: 'RIGHT_SHOULDER', x: 0.65, y: 0.3, z: null, confidence: 0.9 },
+        { name: 'LEFT_HIP', x: 0.4, y: 0.62, z: null, confidence: 0.88 },
+        { name: 'RIGHT_HIP', x: 0.6, y: 0.62, z: null, confidence: 0.86 },
+        { name: 'LEFT_WRIST', x: 0.2, y: 0.55, z: null, confidence: 0.05 },
+        { name: 'RIGHT_WRIST', x: 0.8, y: 0.55, z: null, confidence: 0.04 },
+        { name: 'LEFT_ANKLE', x: 0.42, y: 0.95, z: null, confidence: 0.03 },
+        { name: 'RIGHT_ANKLE', x: 0.58, y: 0.95, z: null, confidence: 0.02 },
+      ],
+    };
+    const fit = await engine.fit({
+      pose,
+      geometry: deriveBodyGeometry(pose),
+      segmentation: null,
+      depth: null,
+    });
+    expect(fit).not.toBeNull();
+    expect(engine.lastStatus).toBe('ready');
+    expect(fit!.confidence).toBeGreaterThanOrEqual(0.86);
+  });
+
   it('fits lower-body categories from hip and ankle landmarks', async () => {
     const engine = new LandmarkFittingEngine();
     engine.setAnchorMode('hips');
@@ -374,14 +420,22 @@ describe('landmark fitting', () => {
     expect(engine.lastStatus).toBe('not_ready');
   });
 
-  it('does not invent a fit when overall pose confidence is too low', async () => {
+  it('does not invent a fit when fitting-joint confidence is too low', async () => {
     const engine = new LandmarkFittingEngine();
     await engine.loadGarment('g1', 'v1', 'T-Shirt');
-    const low: PoseFrame = { ...TEST_FIXTURE_POSE, confidence: 0.05 };
-    const geometry = deriveBodyGeometry(low);
+    const lowJoints: PoseFrame = {
+      timestampMs: 42,
+      confidence: 0.9,
+      keypoints: [
+        { name: 'LEFT_SHOULDER', x: 0.35, y: 0.3, z: null, confidence: 0.1 },
+        { name: 'RIGHT_SHOULDER', x: 0.65, y: 0.3, z: null, confidence: 0.1 },
+        { name: 'LEFT_HIP', x: 0.4, y: 0.6, z: null, confidence: 0.1 },
+        { name: 'RIGHT_HIP', x: 0.6, y: 0.6, z: null, confidence: 0.1 },
+      ],
+    };
     const fit = await engine.fit({
-      pose: low,
-      geometry: geometry!,
+      pose: lowJoints,
+      geometry: deriveBodyGeometry(lowJoints),
       segmentation: null,
       depth: null,
     });

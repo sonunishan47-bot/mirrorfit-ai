@@ -2,11 +2,24 @@ import { POSE_LANDMARKS, type PoseLandmarkName } from '@mirrorfit/types';
 
 import type { Keypoint, PoseFrame } from './geometry';
 
-const UNIT = (value: number) => Number.isFinite(value) && value >= 0 && value <= 1;
+const UNIT_CONFIDENCE = (value: number) => Number.isFinite(value) && value >= 0 && value <= 1;
 
 /**
- * Accepts only a normalized pose. Invalid values are dropped, not clamped
- * into something that looks like a detection.
+ * MediaPipe Pose Landmarker may report joints slightly outside the unit
+ * square when a limb is near or past the frame edge. Those are still real
+ * detections — rejecting them made kiosk TOP fitting report "Hips missing"
+ * whenever the customer stood close to the glass. Non-finite or wildly
+ * out-of-frame values are still dropped (never clamped into a fake joint).
+ */
+export const LANDMARK_COORD_MIN = -0.5;
+export const LANDMARK_COORD_MAX = 1.5;
+
+const FINITE_LANDMARK_COORD = (value: number) =>
+  Number.isFinite(value) && value >= LANDMARK_COORD_MIN && value <= LANDMARK_COORD_MAX;
+
+/**
+ * Accepts a MediaPipe-shaped landmark. Invalid values are dropped, not
+ * clamped into something that looks like a detection.
  */
 export function parseKeypoint(input: unknown): Keypoint | null {
   if (!input || typeof input !== 'object') return null;
@@ -19,7 +32,9 @@ export function parseKeypoint(input: unknown): Keypoint | null {
   if (typeof x !== 'number' || typeof y !== 'number' || typeof confidence !== 'number') {
     return null;
   }
-  if (!UNIT(x) || !UNIT(y) || !UNIT(confidence)) return null;
+  if (!FINITE_LANDMARK_COORD(x) || !FINITE_LANDMARK_COORD(y) || !UNIT_CONFIDENCE(confidence)) {
+    return null;
+  }
   if (z !== null && z !== undefined && (typeof z !== 'number' || !Number.isFinite(z))) {
     return null;
   }
@@ -40,7 +55,7 @@ export function parsePoseFrame(input: unknown): PoseFrame | null {
   if (typeof timestampMs !== 'number' || !Number.isFinite(timestampMs) || timestampMs < 0) {
     return null;
   }
-  if (typeof confidence !== 'number' || !UNIT(confidence)) return null;
+  if (typeof confidence !== 'number' || !UNIT_CONFIDENCE(confidence)) return null;
   if (!Array.isArray(row['keypoints'])) return null;
 
   const seen = new Set<PoseLandmarkName>();

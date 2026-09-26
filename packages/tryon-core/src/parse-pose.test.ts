@@ -15,9 +15,18 @@ describe('pose landmark parsing', () => {
     expect(parseKeypoint(VALID)).toEqual(VALID);
   });
 
-  it('rejects out-of-range coordinates instead of clamping them', () => {
-    expect(parseKeypoint({ ...VALID, x: 1.4 })).toBeNull();
-    expect(parseKeypoint({ ...VALID, y: -0.01 })).toBeNull();
+  it('accepts MediaPipe edge coordinates slightly outside the unit square', () => {
+    expect(parseKeypoint({ ...VALID, x: 1.05, y: -0.02 })).toEqual({
+      ...VALID,
+      x: 1.05,
+      y: -0.02,
+    });
+  });
+
+  it('rejects wildly out-of-frame or non-finite coordinates instead of inventing them', () => {
+    expect(parseKeypoint({ ...VALID, x: 1.6 })).toBeNull();
+    expect(parseKeypoint({ ...VALID, y: -0.6 })).toBeNull();
+    expect(parseKeypoint({ ...VALID, x: Number.POSITIVE_INFINITY })).toBeNull();
   });
 
   it('rejects confidence outside 0..1', () => {
@@ -25,9 +34,7 @@ describe('pose landmark parsing', () => {
     expect(parseKeypoint({ ...VALID, confidence: Number.NaN })).toBeNull();
   });
 
-  it('rejects Infinity coordinates and confidence', () => {
-    expect(parseKeypoint({ ...VALID, x: Number.POSITIVE_INFINITY })).toBeNull();
-    expect(parseKeypoint({ ...VALID, y: Number.NEGATIVE_INFINITY })).toBeNull();
+  it('rejects Infinity confidence and z', () => {
     expect(parseKeypoint({ ...VALID, confidence: Number.POSITIVE_INFINITY })).toBeNull();
     expect(parseKeypoint({ ...VALID, z: Number.POSITIVE_INFINITY })).toBeNull();
   });

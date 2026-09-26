@@ -87,6 +87,11 @@ export function lowerBodyWarpParallelogram(
 /**
  * Draws `bitmap` into a normalized-frame parallelogram on a pixel canvas.
  * Uses a three-point affine map (TL, TR, BL). Returns false when degenerate.
+ *
+ * The canvas transform maps the unit square (0,0)–(1,1) onto the
+ * parallelogram. Destination size for `drawImage` MUST be 1×1 in that
+ * space — using the pixel edge lengths (w×h) double-scales the garment
+ * off-screen (physical kiosk: geometry ready, warp “succeeds”, nothing visible).
  */
 export function drawImageInParallelogram(
   context: CanvasRenderingContext2D,
@@ -97,21 +102,22 @@ export function drawImageInParallelogram(
   opacity = 1,
 ): boolean {
   if (canvasWidth <= 0 || canvasHeight <= 0) return false;
+  const source = bitmapSourceSize(bitmap);
+  if (!source) return false;
+
   const tl = toPx(quad.topLeft, canvasWidth, canvasHeight);
   const tr = toPx(quad.topRight, canvasWidth, canvasHeight);
   const bl = toPx(quad.bottomLeft, canvasWidth, canvasHeight);
   const br = toPx(quad.bottomRight, canvasWidth, canvasHeight);
 
-  const w = Math.hypot(tr.x - tl.x, tr.y - tl.y);
-  const h = Math.hypot(bl.x - tl.x, bl.y - tl.y);
+  const topEdgeX = tr.x - tl.x;
+  const topEdgeY = tr.y - tl.y;
+  const leftEdgeX = bl.x - tl.x;
+  const leftEdgeY = bl.y - tl.y;
+  const w = Math.hypot(topEdgeX, topEdgeY);
+  const h = Math.hypot(leftEdgeX, leftEdgeY);
   if (w < 1 || h < 1) return false;
-
-  // Basis vectors of the parallelogram in pixel space.
-  const xx = (tr.x - tl.x) / w;
-  const xy = (tr.y - tl.y) / w;
-  const yx = (bl.x - tl.x) / h;
-  const yy = (bl.y - tl.y) / h;
-  if (![xx, xy, yx, yy].every(Number.isFinite)) return false;
+  if (![topEdgeX, topEdgeY, leftEdgeX, leftEdgeY].every(Number.isFinite)) return false;
 
   // Sanity: opposite corner should be near tl + (tr-tl) + (bl-tl).
   void br;
@@ -121,10 +127,32 @@ export function drawImageInParallelogram(
   context.globalAlpha = alpha;
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = 'high';
-  context.setTransform(xx * w, xy * w, yx * h, yy * h, tl.x, tl.y);
-  context.drawImage(bitmap, 0, 0, w, h);
+  // Unit square → parallelogram. Do not bake w/h into drawImage destination.
+  context.setTransform(topEdgeX, topEdgeY, leftEdgeX, leftEdgeY, tl.x, tl.y);
+  context.drawImage(bitmap, 0, 0, source.width, source.height, 0, 0, 1, 1);
   context.restore();
   return true;
+}
+
+function bitmapSourceSize(
+  bitmap: CanvasImageSource,
+): { readonly width: number; readonly height: number } | null {
+  if ('naturalWidth' in bitmap && 'naturalHeight' in bitmap) {
+    const width = Number(bitmap.naturalWidth);
+    const height = Number(bitmap.naturalHeight);
+    if (width > 0 && height > 0) return { width, height };
+  }
+  if ('videoWidth' in bitmap && 'videoHeight' in bitmap) {
+    const width = Number(bitmap.videoWidth);
+    const height = Number(bitmap.videoHeight);
+    if (width > 0 && height > 0) return { width, height };
+  }
+  if ('width' in bitmap && 'height' in bitmap) {
+    const width = Number(bitmap.width);
+    const height = Number(bitmap.height);
+    if (width > 0 && height > 0) return { width, height };
+  }
+  return null;
 }
 
 function offsetAlongRoll(center: Point2D, roll: number, signedHalfWidth: number): Point2D {

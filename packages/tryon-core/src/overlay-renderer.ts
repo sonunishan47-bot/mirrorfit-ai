@@ -10,7 +10,10 @@ import type { CameraFrame, RenderingEngine, RenderTarget, StageTiming } from './
 export interface OverlayCanvas {
   width: number;
   height: number;
-  getContext(id: '2d'): CanvasRenderingContext2D | null;
+  getContext(
+    id: '2d',
+    options?: CanvasRenderingContext2DSettings,
+  ): CanvasRenderingContext2D | null;
 }
 
 /** Normalized pivot inside the garment bitmap (0..1). Shoulders ≈ y 0.2–0.35. */
@@ -78,7 +81,9 @@ export class OverlayRenderer implements RenderingEngine {
 
   attach(canvas: OverlayCanvas): void {
     this.#canvas = canvas;
-    this.#context = canvas.getContext('2d');
+    // Explicit alpha so the garment layer never composites as an opaque black plate
+    // over the live camera (fullscreen portal host on the kiosk).
+    this.#context = canvas.getContext('2d', { alpha: true });
   }
 
   setOverlay(bitmap: CanvasImageSource | null, layout?: Partial<OverlayLayout> | null): void {
@@ -181,7 +186,7 @@ export function createTestFixtureShirtBitmap(): HTMLCanvasElement {
   const context = canvas.getContext('2d');
   if (context) {
     context.clearRect(0, 0, 200, 280);
-    context.fillStyle = 'rgba(40, 90, 160, 0.35)';
+    context.fillStyle = 'rgba(40, 90, 160, 0.55)';
     context.beginPath();
     context.moveTo(40, 40);
     context.lineTo(70, 40);
@@ -216,7 +221,7 @@ export function createTestFixturePantsBitmap(): HTMLCanvasElement {
   const context = canvas.getContext('2d');
   if (context) {
     context.clearRect(0, 0, 180, 320);
-    context.fillStyle = 'rgba(50, 70, 110, 0.4)';
+    context.fillStyle = 'rgba(50, 70, 110, 0.6)';
     context.beginPath();
     context.moveTo(40, 20);
     context.lineTo(140, 20);

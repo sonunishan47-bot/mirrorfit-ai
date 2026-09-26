@@ -26,6 +26,8 @@ export interface BrowserCameraPorts {
   readonly getUserMedia: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
   readonly createVideo: () => CameraVideoElement;
   readonly now: () => number;
+  /** Max wait for video dimensions after play (ms). */
+  readonly playTimeoutMs: number;
 }
 
 function defaultGetUserMedia(constraints: MediaStreamConstraints): Promise<MediaStream> {
@@ -85,6 +87,12 @@ export class BrowserCameraProvider implements CameraProvider {
       getUserMedia: ports?.getUserMedia ?? defaultGetUserMedia,
       createVideo: ports?.createVideo ?? defaultCreateVideo,
       now: ports?.now ?? defaultNow,
+      playTimeoutMs:
+        typeof ports?.playTimeoutMs === 'number' &&
+        Number.isFinite(ports.playTimeoutMs) &&
+        ports.playTimeoutMs > 0
+          ? ports.playTimeoutMs
+          : 10_000,
     };
   }
 
@@ -109,7 +117,7 @@ export class BrowserCameraProvider implements CameraProvider {
       video.muted = true;
       video.playsInline = true;
       video.srcObject = stream;
-      await waitUntilPlayable(video);
+      await waitUntilPlayable(video, this.#ports.playTimeoutMs);
       if (generation !== this.#generation) {
         throw new Error('Camera start was cancelled');
       }
@@ -166,21 +174,64 @@ export class BrowserCameraProvider implements CameraProvider {
   }
 }
 
-function waitUntilPlayable(video: CameraVideoElement): Promise<void> {
+function waitUntilPlayable(video: CameraVideoElement, timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
     let settled = false;
-    const finish = () => {
-      if (settled || video.videoWidth === 0 || video.videoHeight === 0) return;
+    let timeoutHandle: ReturnType<typeof setTimeout> | 0 = 0;
+
+    const cleanup = () => {
+      video.removeEventListener('loadedmetadata', onReady);
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+        timeoutHandle = 0;
+      }
+    };
+
+    const succeed = () => {
+      if (settled) return;
+      if (video.videoWidth <= 0 || video.videoHeight <= 0) return;
       settled = true;
-      video.removeEventListener('loadedmetadata', finish);
+      cleanup();
       resolve();
     };
-    video.addEventListener('loadedmetadata', finish);
-    void video.play().then(finish, (error) => {
+
+    const fail = (error: unknown) => {
       if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error instanceof Error ? error : new Error('Camera play failed'));
+    };
+
+    const onReady = () => {
+      succeed();
+    };
+
+    video.addEventListener('loadedmetadata', onReady);
+    // Metadata may already be available (listener would miss the event).
+    succeed();
+    if (settled) return;
+
+    timeoutHandle = setTimeout(() => {
       if (video.videoWidth > 0 && video.videoHeight > 0) {
-        reject(error);
+        succeed();
+        return;
       }
-    });
+      fail(new Error('Camera play timed out'));
+    }, timeoutMs);
+
+    void video.play().then(
+      () => {
+        succeed();
+      },
+      (error: unknown) => {
+        // Muted autoplay can report a rejection while the element is already
+        // decoding — treat a sized feed as success, otherwise surface the error.
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+          succeed();
+          return;
+        }
+        fail(error);
+      },
+    );
   });
 }

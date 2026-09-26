@@ -210,3 +210,84 @@ describe('dispose cleanup', () => {
     expect(camera.readFrame()).toBeNull();
   });
 });
+
+describe('waitUntilPlayable edge cases', () => {
+  it('succeeds when metadata is already present before play', async () => {
+    const track = createFakeTrack();
+    const video = createFakeVideo(1280, 720);
+    // Simulate metadata already decoded before play() (listener would miss the event).
+    (video as { videoWidth: number; videoHeight: number }).videoWidth = 1280;
+    (video as { videoWidth: number; videoHeight: number }).videoHeight = 720;
+    const camera = new BrowserCameraProvider({
+      getUserMedia: () => Promise.resolve(createFakeStream([track])),
+      createVideo: () => video,
+      playTimeoutMs: 50,
+    });
+
+    await camera.start(CONSTRAINTS);
+    expect(camera.isRunning).toBe(true);
+    expect(camera.readFrame()?.width).toBe(1280);
+    await camera.stop();
+  });
+
+  it('succeeds when play() rejects but the element already has a sized feed', async () => {
+    const track = createFakeTrack();
+    const listeners = new Set<() => void>();
+    const video: CameraVideoElement = {
+      srcObject: null,
+      muted: false,
+      playsInline: false,
+      videoWidth: 640,
+      videoHeight: 480,
+      async play() {
+        throw new Error('play rejected');
+      },
+      addEventListener(_type: 'loadedmetadata', listener: () => void) {
+        listeners.add(listener);
+      },
+      removeEventListener(_type: 'loadedmetadata', listener: () => void) {
+        listeners.delete(listener);
+      },
+    };
+    const camera = new BrowserCameraProvider({
+      getUserMedia: () => Promise.resolve(createFakeStream([track])),
+      createVideo: () => video,
+      playTimeoutMs: 50,
+    });
+
+    await camera.start(CONSTRAINTS);
+    expect(camera.isRunning).toBe(true);
+    await camera.stop();
+  });
+
+  it('fails fast when play never produces dimensions', async () => {
+    const track = createFakeTrack();
+    const video: CameraVideoElement = {
+      srcObject: null,
+      muted: false,
+      playsInline: false,
+      videoWidth: 0,
+      videoHeight: 0,
+      async play() {
+        return new Promise(() => {
+          /* never settles */
+        });
+      },
+      addEventListener() {
+        /* never fires loadedmetadata */
+      },
+      removeEventListener() {
+        /* no-op */
+      },
+    };
+    const camera = new BrowserCameraProvider({
+      getUserMedia: () => Promise.resolve(createFakeStream([track])),
+      createVideo: () => video,
+      playTimeoutMs: 30,
+    });
+
+    await expect(camera.start(CONSTRAINTS)).rejects.toThrow(/timed out/);
+    expect(track.stopped).toBe(true);
+    expect(camera.isRunning).toBe(false);
+  });
+});
