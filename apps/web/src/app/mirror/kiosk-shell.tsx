@@ -5,7 +5,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FrameRateCounter, resolveFitCategory } from '@mirrorfit/tryon-core';
 
 import { ClientErrorBoundary } from '@/components/client-error-boundary';
-import { BrowserCameraProvider } from '@/lib/camera/browser-camera';
+import {
+  BrowserCameraProvider,
+  describeCameraStartError,
+} from '@/lib/camera/browser-camera';
 import { resolveCameraPresence } from '@/lib/camera/camera-presence';
 import { startHeartbeatLoop } from '@/lib/device/heartbeat-loop';
 import {
@@ -45,7 +48,8 @@ import { TryOnPanel } from './tryon-panel';
 import { UnenrolledPanel } from './unenrolled-panel';
 
 const CAMERA_CONSTRAINTS = { width: 1920, height: 1080, frameRate: 30 } as const;
-const CAMERA_START_MS = 8_000;
+/** Must exceed BrowserCameraProvider playTimeoutMs so play can finish first. */
+const CAMERA_START_MS = 12_000;
 const POLL_MS = 1000;
 const RESET_MS = 1600;
 const POWER_SAVE_TICK_MS = 1_000;
@@ -85,6 +89,7 @@ export function KioskShell() {
   const [device, setDevice] = useState<StoredDeviceCredential | null>(null);
   const [status, setStatus] = useState<KioskStatus>('IDLE');
   const [camera, setCamera] = useState<CameraStatus>('starting');
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const [pairingUrl, setPairingUrl] = useState<string | null>(null);
   const [qrSvg, setQrSvg] = useState<string | null>(null);
   const [enrollError, setEnrollError] = useState<string | null>(null);
@@ -184,18 +189,27 @@ export function KioskShell() {
     const video = videoRef.current;
     if (!video) {
       setCamera('unavailable');
+      setCameraError('Camera video element was not ready on the mirror page.');
       return;
     }
 
-    const provider = new BrowserCameraProvider({ createVideo: () => video });
+    const provider = new BrowserCameraProvider({
+      createVideo: () => video,
+      // Keep play wait under the UI watchdog so start() can reject first.
+      playTimeoutMs: 9_000,
+      busyRetryDelayMs: 350,
+    });
     cameraRef.current = provider;
     fpsRef.current.reset();
+    setCamera('starting');
+    setCameraError(null);
 
     let cancelled = false;
     const syncLiveFromElement = () => {
       if (cancelled) return;
       if (video.srcObject && video.videoWidth > 0 && video.videoHeight > 0) {
         setCamera('live');
+        setCameraError(null);
       }
     };
     video.addEventListener('loadedmetadata', syncLiveFromElement);
@@ -207,9 +221,22 @@ export function KioskShell() {
       // feed is already attached and sized (false "unavailable" previously).
       if (video.videoWidth > 0 && video.videoHeight > 0 && video.srcObject) {
         setCamera('live');
+        setCameraError(null);
         return;
       }
-      setCamera((current) => (current === 'starting' ? 'unavailable' : current));
+      let markedUnavailable = false;
+      setCamera((current) => {
+        if (current !== 'starting') return current;
+        markedUnavailable = true;
+        return 'unavailable';
+      });
+      if (markedUnavailable) {
+        setCameraError(
+          (prev) =>
+            prev ??
+            'Camera did not become ready in time. Use HTTPS /mirror, allow camera, and confirm no other app holds it.',
+        );
+      }
     }, CAMERA_START_MS);
 
     void provider
@@ -217,6 +244,7 @@ export function KioskShell() {
       .then(() => {
         if (cancelled) return;
         setCamera('live');
+        setCameraError(null);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -224,9 +252,11 @@ export function KioskShell() {
         // Only mark unavailable when the element truly has no feed.
         if (video.srcObject && video.videoWidth > 0 && video.videoHeight > 0) {
           setCamera('live');
+          setCameraError(null);
           return;
         }
         setCamera('unavailable');
+        setCameraError(provider.lastError ?? describeCameraStartError(error));
       });
 
     return () => {
@@ -603,7 +633,9 @@ export function KioskShell() {
                 : 'Camera on this device. Frames stay here.'
               : cameraPresence === 'starting'
                 ? 'Starting camera…'
-                : 'Camera unavailable. This screen will not invent a feed.'}
+                : cameraError
+                  ? `Camera unavailable. ${cameraError}`
+                  : 'Camera unavailable. This screen will not invent a feed.'}
           </p>
           <p className="uppercase tracking-[0.25em]">
             {device

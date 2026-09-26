@@ -64,4 +64,17 @@ describe('pose-occlusion', () => {
     expect(postureFadeFromYaw(0)).toBe(1);
     expect(postureFadeFromYaw(1)).toBe(YAW_OPACITY_FLOOR);
   });
+it('allows laptop-tolerant low pose confidence through the opacity path', () => {
+    const result = computeOverlayOpacity({
+      geometry: FRONT,
+      poseConfidence: 0.12,
+    });
+    expect(result.overlayOpacity).toBeGreaterThan(0);
+  });
+
+  it('still zeros opacity below the occlusion floor', () => {
+    expect(
+      computeOverlayOpacity({ geometry: FRONT, poseConfidence: 0.05 }).overlayOpacity,
+    ).toBe(0);
+  });
 });

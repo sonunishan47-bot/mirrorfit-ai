@@ -44,16 +44,19 @@ export interface MediaPipeLandmarkLike {
  * — never a fabricated skeleton.
  */
 export function poseFrameFromMediaPipe(
-  landmarks: readonly MediaPipeLandmarkLike[] | undefined,
+  landmarks: readonly MediaPipeLandmarkLike[] | undefined | null,
   timestampMs: number,
 ): PoseFrame | null {
-  if (!landmarks || landmarks.length === 0) return null;
+  // Empty / missing person → null. Non-arrays (corrupt WASM output) → null.
+  // Sparse holes in the landmark list must not throw on point.visibility.
+  if (!landmarks || !Array.isArray(landmarks) || landmarks.length === 0) return null;
   if (!Number.isFinite(timestampMs) || timestampMs < 0) return null;
 
   const keypoints = [];
   let visibilitySum = 0;
   let visibilityCount = 0;
   for (const [index, point] of landmarks.entries()) {
+    if (!point || typeof point !== 'object') continue;
     const name = MEDIAPIPE_TO_COCO[index];
     if (!name) continue;
     const confidence =

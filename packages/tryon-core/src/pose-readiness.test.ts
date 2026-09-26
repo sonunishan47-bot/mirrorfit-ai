@@ -61,4 +61,13 @@ describe('pose readiness for TOP fitting', () => {
     expect(readiness.geometryReady).toBe(false);
     expect(formatPoseReadiness(readiness)).toContain('Hips missing');
   });
+it('treats laptop-tolerant mid confidence joints as ready (was blocked at 0.35)', () => {
+    const readiness = describePoseReadiness({
+      ...READY,
+      keypoints: READY.keypoints.map((point) => ({ ...point, confidence: 0.25 })),
+    });
+    expect(readiness.shouldersReady).toBe(true);
+    expect(readiness.hipsReady).toBe(true);
+    expect(readiness.geometryReady).toBe(true);
+  });
 });

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { UnavailablePoseProvider } from '@mirrorfit/tryon-core';
 
-import { createKioskPoseProvider, MediaPipePoseProvider } from './mediapipe-pose-provider';
+import { createKioskPoseProvider, firstPersonLandmarks, MediaPipePoseProvider } from './mediapipe-pose-provider';
 
 describe('MediaPipe pose provider in Node', () => {
   it('fails initialize without a browser window and does not invent landmarks', async () => {
@@ -53,5 +53,23 @@ describe('MediaPipe pose provider in Node', () => {
       }),
     ).toBeNull();
     await provider.dispose();
+  });
+});
+
+describe('firstPersonLandmarks', () => {
+  it('returns null for missing, empty, or non-array landmark results without throwing', () => {
+    expect(firstPersonLandmarks(null)).toBeNull();
+    expect(firstPersonLandmarks(undefined)).toBeNull();
+    expect(firstPersonLandmarks({})).toBeNull();
+    expect(firstPersonLandmarks({ landmarks: [] })).toBeNull();
+    expect(firstPersonLandmarks({ landmarks: [[]] })).toBeNull();
+    expect(firstPersonLandmarks({ landmarks: 'nope' })).toBeNull();
+    expect(firstPersonLandmarks({ landmarks: [null] })).toBeNull();
+    expect(firstPersonLandmarks({ landmarks: [{}] })).toBeNull();
+  });
+
+  it('returns the first person list when MediaPipe shaped output is present', () => {
+    const person = [{ x: 0.5, y: 0.2, visibility: 0.9 }];
+    expect(firstPersonLandmarks({ landmarks: [person] })).toEqual(person);
   });
 });

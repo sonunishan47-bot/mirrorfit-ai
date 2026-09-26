@@ -111,8 +111,9 @@ export class MediaPipePoseProvider implements PoseProvider {
       // `source` is the live kiosk <video>. Coordinates stay in video space;
       // the overlay canvas is CSS-mirrored with the preview, not here.
       const result = this.#landmarker.detectForVideo(source, timestamp);
-      const person = result.landmarks?.[0];
-      return Promise.resolve(poseFrameFromMediaPipe(person, frame.timestampMs));
+      // Guard empty/partial MediaPipe results (see firstPersonLandmarks).
+      const person = firstPersonLandmarks(result);
+      return Promise.resolve(poseFrameFromMediaPipe(person ?? undefined, frame.timestampMs));
     } catch (error) {
       this.#lastError = reasonFrom(error);
       return Promise.resolve(null);
@@ -151,6 +152,25 @@ export async function createKioskPoseProvider(): Promise<PoseProvider> {
   );
 }
 
+/**
+ * Safely picks the first person landmark list from MediaPipe detectForVideo output.
+ * Returns null when landmarks are missing, empty, or not an array — never throws
+ * on `landmarks?.[0]` when the result shape is partial.
+ */
+export function firstPersonLandmarks(
+  result: { landmarks?: unknown } | null | undefined,
+): Array<{ x: number; y: number; z?: number; visibility?: number; presence?: number }> | null {
+  const people = result?.landmarks;
+  const person = Array.isArray(people) ? people[0] : undefined;
+  if (!Array.isArray(person) || person.length === 0) return null;
+  return person as Array<{
+    x: number;
+    y: number;
+    z?: number;
+    visibility?: number;
+    presence?: number;
+  }>;
+}
 function reasonFrom(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message.slice(0, 200);

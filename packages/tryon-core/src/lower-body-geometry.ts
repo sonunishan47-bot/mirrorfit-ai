@@ -1,7 +1,6 @@
 import type { Point2D, PoseFrame } from './geometry';
 import { keypointByName } from './parse-pose';
-
-const MIN_CONFIDENCE = 0.35;
+import { LANDMARK_JOINT_MIN_CONFIDENCE } from './pose-thresholds';
 export const MIN_HIP_WIDTH = 0.04;
 export const MIN_LEG_LENGTH = 0.08;
 
@@ -26,18 +25,18 @@ function distance(a: Point2D, b: Point2D): number {
  * Lower-body proportions from real hip + ankle (or knee) landmarks.
  *
  * Prefers ankles for leg length; falls back to knees when ankles are missing.
- * Returns null when hips or a distal pair are not confident — never invents
+ * Returns null when hips or a distal pair are not confident â€” never invents
  * pant length.
  */
 export function deriveLowerBodyGeometry(pose: PoseFrame): LowerBodyGeometry | null {
-  const leftHip = keypointByName(pose, 'LEFT_HIP', MIN_CONFIDENCE);
-  const rightHip = keypointByName(pose, 'RIGHT_HIP', MIN_CONFIDENCE);
+  const leftHip = keypointByName(pose, 'LEFT_HIP', LANDMARK_JOINT_MIN_CONFIDENCE);
+  const rightHip = keypointByName(pose, 'RIGHT_HIP', LANDMARK_JOINT_MIN_CONFIDENCE);
   if (!leftHip || !rightHip) return null;
 
-  const leftAnkle = keypointByName(pose, 'LEFT_ANKLE', MIN_CONFIDENCE);
-  const rightAnkle = keypointByName(pose, 'RIGHT_ANKLE', MIN_CONFIDENCE);
-  const leftKnee = keypointByName(pose, 'LEFT_KNEE', MIN_CONFIDENCE);
-  const rightKnee = keypointByName(pose, 'RIGHT_KNEE', MIN_CONFIDENCE);
+  const leftAnkle = keypointByName(pose, 'LEFT_ANKLE', LANDMARK_JOINT_MIN_CONFIDENCE);
+  const rightAnkle = keypointByName(pose, 'RIGHT_ANKLE', LANDMARK_JOINT_MIN_CONFIDENCE);
+  const leftKnee = keypointByName(pose, 'LEFT_KNEE', LANDMARK_JOINT_MIN_CONFIDENCE);
+  const rightKnee = keypointByName(pose, 'RIGHT_KNEE', LANDMARK_JOINT_MIN_CONFIDENCE);
 
   let footLeft = leftAnkle;
   let footRight = rightAnkle;

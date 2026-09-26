@@ -102,4 +102,23 @@ describe('poseFrameFromMediaPipe', () => {
     expect(frame?.keypoints[0]?.name).toBe('NOSE');
     expect(frame?.keypoints[0]?.confidence).toBe(0.8);
   });
+
+  it('skips sparse landmark holes instead of throwing on point.visibility', () => {
+    const sparse: Array<MediaPipeLandmarkLike | undefined> = Array.from({ length: 33 });
+    sparse[0] = { x: 0.5, y: 0.15, visibility: 0.9 };
+    sparse[11] = { x: 0.35, y: 0.3, visibility: 0.85 };
+    sparse[12] = { x: 0.65, y: 0.3, visibility: 0.85 };
+    // index 23 intentionally left undefined (hole) — must not throw
+    sparse[24] = { x: 0.6, y: 0.62, visibility: 0.8 };
+    expect(() => poseFrameFromMediaPipe(sparse as MediaPipeLandmarkLike[], 50)).not.toThrow();
+    const frame = poseFrameFromMediaPipe(sparse as MediaPipeLandmarkLike[], 50);
+    expect(frame).not.toBeNull();
+    expect(frame?.keypoints.some((p) => p.name === 'LEFT_HIP')).toBe(false);
+    expect(frame?.keypoints.some((p) => p.name === 'RIGHT_HIP')).toBe(true);
+  });
+
+  it('returns null for non-array landmark payloads without throwing', () => {
+    expect(poseFrameFromMediaPipe(null, 1)).toBeNull();
+    expect(poseFrameFromMediaPipe({} as unknown as MediaPipeLandmarkLike[], 1)).toBeNull();
+  });
 });

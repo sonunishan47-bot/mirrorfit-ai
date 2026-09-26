@@ -5,7 +5,20 @@ import { deriveBodyGeometry } from './body-geometry';
 import { resolveFitCategory } from './fit-category';
 import { deriveLowerBodyGeometry } from './lower-body-geometry';
 import { keypointByName } from './parse-pose';
+import {
+  FIT_HOLD_CONFIDENCE_DECAY,
+  FIT_HOLD_MAX_FRAMES,
+  MIN_POSE_CONFIDENCE,
+  OVERLAY_MIN_DRAW_CONFIDENCE,
+} from './pose-thresholds';
 import type { FittingInput, GarmentFittingEngine } from './providers';
+
+export {
+  FIT_HOLD_CONFIDENCE_DECAY,
+  FIT_HOLD_MAX_FRAMES,
+  MIN_POSE_CONFIDENCE,
+  OVERLAY_MIN_DRAW_CONFIDENCE,
+} from './pose-thresholds';
 
 export interface GarmentFitRequest {
   readonly garmentId: string;
@@ -34,15 +47,14 @@ export const TOP_VERTICAL_OFFSET = 0.38;
 export const LOWER_WIDTH_FACTOR = 1.25;
 /** Leg length factor when no asset aspect is available. */
 export const LOWER_HEIGHT_FACTOR = 1.05;
-export const MIN_POSE_CONFIDENCE = 0.2;
 /** Reject a body that is rolled so far the garment would be edge-on. */
 export const MAX_ABS_ROLL = Math.PI / 3;
 /** Light EMA toward new samples — reduces jitter without inventing pose. */
-export const FIT_SMOOTHING_ALPHA = 0.45;
+export const FIT_SMOOTHING_ALPHA = 0.35; // was 0.45 — smoother on noisy laptop cams
 /** Translate tracks a bit faster than scale to reduce lag on lateral moves. */
-export const FIT_TRANSLATE_ALPHA = 0.55;
-export const FIT_SCALE_ALPHA = 0.4;
-export const FIT_ROTATION_ALPHA = 0.35;
+export const FIT_TRANSLATE_ALPHA = 0.42; // was 0.55
+export const FIT_SCALE_ALPHA = 0.32; // was 0.4
+export const FIT_ROTATION_ALPHA = 0.28; // was 0.35
 /**
  * Blend of hip width into draw width (0 = shoulders only). Keeps tops from
  * pinching at the waist when hips are wider — still geometry, not invention.
@@ -88,6 +100,8 @@ export class LandmarkFittingEngine implements GarmentFittingEngine {
   #garment: GarmentFitRequest | null = null;
   #anchorMode: AnchorMode = 'center';
   #previousFit: FittingResult | null = null;
+  /** Consecutive frames without a fresh fit — used for overlay hold/hysteresis. */
+  #missStreak = 0;
   #widthFactor: number | null = null;
   #hipWidthBlend: number | null = null;
 
@@ -101,16 +115,21 @@ export class LandmarkFittingEngine implements GarmentFittingEngine {
     return this.#lastStatus;
   }
 
+  #resetHold(): void {
+    this.#previousFit = null;
+    this.#missStreak = 0;
+  }
+
   setAnchorMode(mode: AnchorMode): void {
     this.#anchorMode = mode;
-    this.#previousFit = null;
+    this.#resetHold();
   }
 
   /** Category-aware width hint; null restores family default factor. */
   setWidthFactor(factor: number | null): void {
     this.#widthFactor =
       typeof factor === 'number' && Number.isFinite(factor) && factor > 0 ? factor : null;
-    this.#previousFit = null;
+    this.#resetHold();
   }
 
   /** Optional hip blend into draw width (TOP); null uses DEFAULT_HIP_WIDTH_BLEND. */
@@ -119,7 +138,7 @@ export class LandmarkFittingEngine implements GarmentFittingEngine {
       typeof blend === 'number' && Number.isFinite(blend)
         ? Math.min(1, Math.max(0, blend))
         : null;
-    this.#previousFit = null;
+    this.#resetHold();
   }
 
   loadGarment(garmentId: string, variantId: string, category?: string | null): Promise<void> {
@@ -131,13 +150,22 @@ export class LandmarkFittingEngine implements GarmentFittingEngine {
       variantId,
       ...(category === undefined ? {} : { category }),
     };
-    this.#previousFit = null;
+    this.#resetHold();
     return Promise.resolve();
   }
 
   clearGarment(): void {
     this.#garment = null;
-    this.#previousFit = null;
+    this.#resetHold();
+  }
+
+  /**
+   * Drop any held overlay immediately (person lost / camera stop).
+   * Does not invent a new pose — only clears the hysteresis buffer.
+   */
+  clearHeldFit(): void {
+    this.#resetHold();
+    this.#lastStatus = 'not_ready';
   }
 
   get loadedGarment(): GarmentFitRequest | null {
@@ -151,14 +179,40 @@ export class LandmarkFittingEngine implements GarmentFittingEngine {
       ...(this.#widthFactor === null ? {} : { widthFactor: this.#widthFactor }),
       ...(this.#hipWidthBlend === null ? {} : { hipWidthBlend: this.#hipWidthBlend }),
     });
+
+    if (result.fit) {
+      this.#missStreak = 0;
+      this.#previousFit = result.fit;
+      this.#lastStatus = result.status;
+      return Promise.resolve(result.fit);
+    }
+
+    // Brief miss after a good fit → hold last transform so the shirt does not flicker off
+    // on weak laptop-camera frames. Confidence decays; never invents a new pose.
+    if (this.#previousFit && this.#missStreak < FIT_HOLD_MAX_FRAMES) {
+      this.#missStreak += 1;
+      const decayed = Math.max(
+        OVERLAY_MIN_DRAW_CONFIDENCE,
+        this.#previousFit.confidence * Math.pow(FIT_HOLD_CONFIDENCE_DECAY, this.#missStreak),
+      );
+      const held: FittingResult = {
+        timestampMs: input.pose.timestampMs,
+        confidence: decayed,
+        transform: this.#previousFit.transform,
+      };
+      this.#previousFit = held;
+      this.#lastStatus = 'ready';
+      return Promise.resolve(held);
+    }
+
+    this.#resetHold();
     this.#lastStatus = result.status;
-    this.#previousFit = result.fit;
-    return Promise.resolve(result.fit);
+    return Promise.resolve(null);
   }
 
   dispose(): Promise<void> {
     this.#garment = null;
-    this.#previousFit = null;
+    this.#resetHold();
     this.#widthFactor = null;
     this.#hipWidthBlend = null;
     return Promise.resolve();

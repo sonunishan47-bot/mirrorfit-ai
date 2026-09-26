@@ -1,4 +1,5 @@
 import type { BodyGeometry } from './geometry';
+import { OCCLUSION_MIN_POSE_CONFIDENCE } from './pose-thresholds';
 import type { BodyRegionMap } from './unavailable-segmentation';
 
 export interface PoseOcclusionInput {
@@ -34,7 +35,7 @@ export const ROLL_FADE_END = Math.PI / 3;
  */
 export function computeOverlayOpacity(input: PoseOcclusionInput): PoseOcclusionResult {
   const confidence = clamp01(input.poseConfidence);
-  if (!input.geometry || confidence < 0.2) {
+  if (!input.geometry || confidence < OCCLUSION_MIN_POSE_CONFIDENCE) {
     return { overlayOpacity: 0, usedSegmentation: false };
   }
 

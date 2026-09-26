@@ -1,5 +1,6 @@
 import type { FittingResult } from './geometry';
 import { overlayPointFromLandmark } from './overlay-coordinates';
+import { OVERLAY_MIN_DRAW_CONFIDENCE } from './pose-thresholds';
 import { postureFadeFromYaw } from './pose-occlusion';
 import {
   drawImageInParallelogram,
@@ -121,7 +122,7 @@ export class OverlayRenderer implements RenderingEngine {
       return Promise.resolve({ durationMs: now() - started });
     }
     context.clearRect(0, 0, this.#canvas.width, this.#canvas.height);
-    if (!fit || !this.#bitmap || fit.confidence < 0.2) {
+    if (!fit || !this.#bitmap || fit.confidence < OVERLAY_MIN_DRAW_CONFIDENCE) {
       void frame;
       return Promise.resolve({ durationMs: now() - started });
     }

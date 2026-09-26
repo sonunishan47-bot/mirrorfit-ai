@@ -1,7 +1,6 @@
 import type { PoseFrame } from './geometry';
 import { keypointByName } from './parse-pose';
-
-const MIN_CONFIDENCE = 0.35;
+import { LANDMARK_JOINT_MIN_CONFIDENCE } from './pose-thresholds';
 
 export interface PoseReadiness {
   readonly landmarkCount: number;
@@ -13,7 +12,7 @@ export interface PoseReadiness {
 /**
  * Counts validated landmarks and whether TOP-fitting joints are present.
  *
- * Does not invent missing joints. Does not include coordinates — this is
+ * Does not invent missing joints. Does not include coordinates â€” this is
  * for the kiosk acceptance line, not a biometric record.
  */
 export function describePoseReadiness(pose: PoseFrame | null): PoseReadiness {
@@ -25,10 +24,10 @@ export function describePoseReadiness(pose: PoseFrame | null): PoseReadiness {
       geometryReady: false,
     };
   }
-  const leftShoulder = keypointByName(pose, 'LEFT_SHOULDER', MIN_CONFIDENCE);
-  const rightShoulder = keypointByName(pose, 'RIGHT_SHOULDER', MIN_CONFIDENCE);
-  const leftHip = keypointByName(pose, 'LEFT_HIP', MIN_CONFIDENCE);
-  const rightHip = keypointByName(pose, 'RIGHT_HIP', MIN_CONFIDENCE);
+  const leftShoulder = keypointByName(pose, 'LEFT_SHOULDER', LANDMARK_JOINT_MIN_CONFIDENCE);
+  const rightShoulder = keypointByName(pose, 'RIGHT_SHOULDER', LANDMARK_JOINT_MIN_CONFIDENCE);
+  const leftHip = keypointByName(pose, 'LEFT_HIP', LANDMARK_JOINT_MIN_CONFIDENCE);
+  const rightHip = keypointByName(pose, 'RIGHT_HIP', LANDMARK_JOINT_MIN_CONFIDENCE);
   const shouldersReady = Boolean(leftShoulder && rightShoulder);
   const hipsReady = Boolean(leftHip && rightHip);
   return {

@@ -381,6 +381,8 @@ export function TryOnPanel({
                   move('PERSON_SEEN');
                   presenceRef.current?.(true);
                 } else {
+                  // Person lost — drop any held overlay so we do not freeze a ghost shirt.
+                  fitting.clearHeldFit();
                   setPoseHint((current) => (current === null ? current : null));
                   move('PERSON_LOST');
                   presenceRef.current?.(false);
@@ -394,7 +396,9 @@ export function TryOnPanel({
                 const geometryReady =
                   family === 'LOWER_BODY' ? lowerGeometry !== null : geometry !== null;
 
-                if (selected && landmarks && geometryReady) {
+                // Call fit whenever a person + garment are present so the engine's
+                // hold/hysteresis can keep the shirt up across brief weak frames.
+                if (selected && landmarks) {
                   const fit = await fitting.fit({
                     pose: landmarks,
                     geometry,
@@ -409,6 +413,8 @@ export function TryOnPanel({
                     move('FIT_READY');
                   } else if (fit && !drawable) {
                     noteReason('No drawable garment overlay asset is available.');
+                    move('FIT_NOT_READY');
+                  } else if (!geometryReady) {
                     move('FIT_NOT_READY');
                   } else {
                     move('FIT_NOT_READY');
@@ -440,10 +446,15 @@ export function TryOnPanel({
                   const occlusion = occlusionGeometry
                     ? computeOverlayOpacity({
                         geometry: occlusionGeometry,
-                        poseConfidence: landmarks.confidence,
+                        poseConfidence: fit?.confidence ?? landmarks.confidence,
                         regions: segmentation.readRegions(frame.timestampMs),
                       })
-                    : { overlayOpacity: Math.min(1, Math.max(0, landmarks.confidence)) };
+                    : {
+                        overlayOpacity: Math.min(
+                          1,
+                          Math.max(0, fit?.confidence ?? landmarks.confidence),
+                        ),
+                      };
                   await renderer.render(frame, fit && drawable ? fit : null, {
                     opacity: fit && drawable ? occlusion.overlayOpacity : 0,
                     yaw: geometry?.yaw ?? 0,
@@ -454,9 +465,6 @@ export function TryOnPanel({
                     renderer.resize({ width: frame.width, height: frame.height });
                   }
                   await renderer.render(frame, null);
-                  if (selected && !geometryReady) {
-                    move('FIT_NOT_READY');
-                  }
                 }
 
                 if (disposed) return;

@@ -24,3 +24,4 @@ export * from './pose-warp';
 export * from './lower-body-geometry';
 export * from './unavailable-photorealistic';
 export * from './async-tryon-queue';
+export * from './pose-thresholds';

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { BrowserCameraProvider, type CameraVideoElement } from './browser-camera';
+import {
+  BrowserCameraProvider,
+  describeCameraStartError,
+  type CameraVideoElement,
+} from './browser-camera';
 
 const CONSTRAINTS = { width: 1280, height: 720, frameRate: 30 };
 
@@ -289,5 +293,83 @@ describe('waitUntilPlayable edge cases', () => {
     await expect(camera.start(CONSTRAINTS)).rejects.toThrow(/timed out/);
     expect(track.stopped).toBe(true);
     expect(camera.isRunning).toBe(false);
+  });
+});
+
+
+describe('constraint fallbacks and busy retry', () => {
+  it('falls back to softer constraints when preferred getUserMedia fails', async () => {
+    const track = createFakeTrack();
+    const calls: MediaStreamConstraints[] = [];
+    const camera = new BrowserCameraProvider({
+      getUserMedia: (constraints) => {
+        calls.push(constraints);
+        if (calls.length === 1) {
+          return Promise.reject(Object.assign(new Error('overconstrained'), { name: 'OverconstrainedError' }));
+        }
+        return Promise.resolve(createFakeStream([track]));
+      },
+      createVideo: () => createFakeVideo(1280, 720),
+      busyRetryDelayMs: 0,
+    });
+
+    await camera.start(CONSTRAINTS);
+    expect(camera.isRunning).toBe(true);
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(calls[0]?.video).toEqual(
+      expect.objectContaining({
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        facingMode: { ideal: 'user' },
+      }),
+    );
+    await camera.stop();
+  });
+
+  it('retries once when the device is briefly busy', async () => {
+    const track = createFakeTrack();
+    let attempts = 0;
+    const camera = new BrowserCameraProvider({
+      getUserMedia: () => {
+        attempts += 1;
+        if (attempts === 1) {
+          return Promise.reject(Object.assign(new Error('busy'), { name: 'NotReadableError' }));
+        }
+        return Promise.resolve(createFakeStream([track]));
+      },
+      createVideo: () => createFakeVideo(640, 480),
+      busyRetryDelayMs: 0,
+    });
+
+    await camera.start(CONSTRAINTS);
+    expect(attempts).toBe(2);
+    expect(camera.isRunning).toBe(true);
+    await camera.stop();
+  });
+
+  it('does not keep retrying after NotAllowedError', async () => {
+    let attempts = 0;
+    const camera = new BrowserCameraProvider({
+      getUserMedia: () => {
+        attempts += 1;
+        return Promise.reject(Object.assign(new Error('denied'), { name: 'NotAllowedError' }));
+      },
+      createVideo: () => createFakeVideo(640, 480),
+      busyRetryDelayMs: 0,
+    });
+
+    await expect(camera.start(CONSTRAINTS)).rejects.toMatchObject({ name: 'NotAllowedError' });
+    expect(attempts).toBe(1);
+    expect(camera.lastError).toMatch(/permission is blocked/i);
+  });
+});
+
+describe('describeCameraStartError', () => {
+  it('explains missing secure context', () => {
+    expect(
+      describeCameraStartError(
+        Object.assign(new Error('Camera requires a secure HTTPS origin'), { name: 'SecurityError' }),
+      ),
+    ).toMatch(/HTTPS/i);
   });
 });

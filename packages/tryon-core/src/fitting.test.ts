@@ -478,4 +478,73 @@ describe('landmark fitting', () => {
     expect(second!.transform.translate.x).toBeLessThan(jumpedGeo.shoulderCenter.x);
     await engine.dispose();
   });
+it('holds the last good fit across brief weak frames (hysteresis)', async () => {
+    const engine = new LandmarkFittingEngine();
+    engine.setAnchorMode('shoulders');
+    await engine.loadGarment('g1', 'v1', 'Tops');
+    const good = await engine.fit({
+      pose: TEST_FIXTURE_POSE,
+      geometry: deriveBodyGeometry(TEST_FIXTURE_POSE),
+      segmentation: null,
+      depth: null,
+    });
+    expect(good).not.toBeNull();
+    expect(engine.lastStatus).toBe('ready');
+
+    const weak: PoseFrame = {
+      timestampMs: 99,
+      confidence: 0.9,
+      keypoints: [
+        { name: 'LEFT_SHOULDER', x: 0.35, y: 0.3, z: null, confidence: 0.05 },
+        { name: 'RIGHT_SHOULDER', x: 0.65, y: 0.3, z: null, confidence: 0.05 },
+        { name: 'LEFT_HIP', x: 0.4, y: 0.6, z: null, confidence: 0.05 },
+        { name: 'RIGHT_HIP', x: 0.6, y: 0.6, z: null, confidence: 0.05 },
+      ],
+    };
+    const held = await engine.fit({
+      pose: weak,
+      geometry: deriveBodyGeometry(weak),
+      segmentation: null,
+      depth: null,
+    });
+    expect(held).not.toBeNull();
+    expect(engine.lastStatus).toBe('ready');
+    expect(held!.transform.translate.x).toBeCloseTo(good!.transform.translate.x);
+    expect(held!.confidence).toBeLessThan(good!.confidence);
+
+    engine.clearHeldFit();
+    const afterClear = await engine.fit({
+      pose: weak,
+      geometry: deriveBodyGeometry(weak),
+      segmentation: null,
+      depth: null,
+    });
+    expect(afterClear).toBeNull();
+    expect(engine.lastStatus).toBe('not_ready');
+  });
+
+  it('fits TOP when joint confidence is laptop-tolerant mid-range', async () => {
+    const engine = new LandmarkFittingEngine();
+    engine.setAnchorMode('shoulders');
+    await engine.loadGarment('g1', 'v1', 'Tops');
+    const mid: PoseFrame = {
+      timestampMs: 7,
+      confidence: 0.3,
+      keypoints: [
+        { name: 'LEFT_SHOULDER', x: 0.35, y: 0.3, z: null, confidence: 0.25 },
+        { name: 'RIGHT_SHOULDER', x: 0.65, y: 0.3, z: null, confidence: 0.25 },
+        { name: 'LEFT_HIP', x: 0.4, y: 0.62, z: null, confidence: 0.24 },
+        { name: 'RIGHT_HIP', x: 0.6, y: 0.62, z: null, confidence: 0.24 },
+      ],
+    };
+    const fit = await engine.fit({
+      pose: mid,
+      geometry: deriveBodyGeometry(mid),
+      segmentation: null,
+      depth: null,
+    });
+    expect(deriveBodyGeometry(mid)).not.toBeNull();
+    expect(fit).not.toBeNull();
+    expect(engine.lastStatus).toBe('ready');
+  });
 });
