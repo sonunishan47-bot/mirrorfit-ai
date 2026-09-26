@@ -11,6 +11,8 @@ export const DEFAULT_HEARTBEAT_INTERVAL_MS = 15_000;
 export interface HeartbeatSample {
   readonly camera_ok: boolean;
   readonly render_fps: number | null;
+  /** Coarse numeric analytics only — never frames, paths, or secrets. */
+  readonly metrics?: Readonly<Record<string, number>> | null;
 }
 
 export interface HeartbeatLoopOptions {
@@ -39,6 +41,8 @@ export function startHeartbeatLoop(options: HeartbeatLoopOptions): HeartbeatLoop
     const renderFps = sample.render_fps;
     // Guard against a caller that "helpfully" substitutes 0 for no samples.
     const fps = renderFps === null || renderFps === undefined ? null : renderFps;
+    const metrics =
+      sample.metrics && Object.keys(sample.metrics).length > 0 ? sample.metrics : null;
 
     try {
       const response = await options.fetchFn('/api/device/heartbeat', {
@@ -51,6 +55,7 @@ export function startHeartbeatLoop(options: HeartbeatLoopOptions): HeartbeatLoop
           camera_ok: sample.camera_ok,
           render_fps: fps,
           processing_fps: null,
+          ...(metrics ? { metrics } : {}),
         }),
       });
 

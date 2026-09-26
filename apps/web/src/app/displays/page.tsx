@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { ADMIN_ROLE_RANK } from '@mirrorfit/types';
 
 import { signOut } from '@/app/login/actions';
@@ -66,11 +68,16 @@ export default async function DisplaysPage() {
             {staff.shopId ? ' (single shop)' : ' (organization-wide)'}
           </p>
         </div>
-        <form action={signOut}>
-          <button type="submit" className="text-sm text-muted underline-offset-2 hover:underline">
-            Sign out
-          </button>
-        </form>
+        <div className="flex items-center gap-4">
+          <Link href="/ops" className="text-sm text-muted underline-offset-2 hover:underline">
+            Operations
+          </Link>
+          <form action={signOut}>
+            <button type="submit" className="text-sm text-muted underline-offset-2 hover:underline">
+              Sign out
+            </button>
+          </form>
+        </div>
       </header>
 
       {canManage ? (

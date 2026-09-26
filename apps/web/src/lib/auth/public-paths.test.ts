@@ -11,6 +11,7 @@ describe('kiosk and device paths stay off the login redirect', () => {
 
   it('does not treat staff pages as public', () => {
     expect(isPublicPath('/displays')).toBe(false);
+    expect(isPublicPath('/ops')).toBe(false);
     expect(isPublicPath('/login')).toBe(true);
   });
 

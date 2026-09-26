@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { FrameRateCounter } from '@mirrorfit/tryon-core';
+import { FrameRateCounter, resolveFitCategory } from '@mirrorfit/tryon-core';
 
 import { BrowserCameraProvider } from '@/lib/camera/browser-camera';
 import { startHeartbeatLoop } from '@/lib/device/heartbeat-loop';
@@ -13,6 +13,7 @@ import {
   type StoredDeviceCredential,
 } from '@/lib/device/store';
 import { noteCameraFrame } from '@/lib/kiosk/fps';
+import { KioskAnalyticsBuffer } from '@/lib/kiosk/kiosk-analytics';
 import { presentKiosk, reduceKiosk, type KioskStatus } from '@/lib/kiosk/machine';
 import { pairingQrValue } from '@/lib/kiosk/pairing-qr';
 import {
@@ -64,8 +65,11 @@ export function KioskShell() {
   const fpsRef = useRef(new FrameRateCounter());
   const statusRef = useRef<KioskStatus>('IDLE');
   const lifecycleRef = useRef(createSessionLifecycle());
+  const analyticsRef = useRef(new KioskAnalyticsBuffer());
   const lastActivityRef = useRef(Date.now());
   const powerPhaseRef = useRef<PowerSavePhase>('awake');
+  const prevGarmentKeyRef = useRef<string>('');
+  const prevStatusRef = useRef<KioskStatus>('IDLE');
 
   const [device, setDevice] = useState<StoredDeviceCredential | null>(null);
   const [status, setStatus] = useState<KioskStatus>('IDLE');
@@ -107,9 +111,26 @@ export function KioskShell() {
     setDevice(loadDeviceCredential());
   }, []);
 
-  // Presence / claim / garment changes count as activity.
+  // Presence / claim / garment changes count as activity + coarse analytics.
   useEffect(() => {
     noteActivity(true);
+    const garmentKey = selectedGarment
+      ? `${selectedGarment.garmentId}:${selectedGarment.variantId}`
+      : '';
+    if (garmentKey && garmentKey !== prevGarmentKeyRef.current) {
+      analyticsRef.current.noteTryOnSelection(
+        resolveFitCategory(selectedGarment?.category ?? null),
+      );
+    }
+    prevGarmentKeyRef.current = garmentKey;
+
+    if (status === 'ACTIVE' && prevStatusRef.current !== 'ACTIVE') {
+      analyticsRef.current.noteSessionStarted();
+    }
+    if (status === 'ENDED' && prevStatusRef.current !== 'ENDED') {
+      analyticsRef.current.noteSessionEnded();
+    }
+    prevStatusRef.current = status;
   }, [status, selectedGarment, noteActivity]);
 
   useEffect(() => {
@@ -213,6 +234,7 @@ export function KioskShell() {
       getSample: () => ({
         camera_ok: camera === 'live',
         render_fps: fpsRef.current.fps(),
+        metrics: analyticsRef.current.toHeartbeatMetrics(),
       }),
       fetchFn: fetch,
       onUnauthorized: () => {
@@ -449,7 +471,10 @@ export function KioskShell() {
                   selectedCategory={selectedGarment?.category ?? null}
                   selectedIsTestFixture={selectedGarment?.isTestFixture === true}
                   onPresenceChange={(present) => {
-                    if (present) noteActivity(true);
+                    if (present) {
+                      analyticsRef.current.notePersonSeen();
+                      noteActivity(true);
+                    }
                   }}
                 />
               ) : null}

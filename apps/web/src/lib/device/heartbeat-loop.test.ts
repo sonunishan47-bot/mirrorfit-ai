@@ -112,6 +112,29 @@ describe('heartbeat loop', () => {
     expect(JSON.stringify(body)).not.toMatch(/frame|pixel|image|png|jpeg/i);
   });
 
+  it('includes coarse analytics metrics without frames or secrets', async () => {
+    let body: Record<string, unknown> | undefined;
+    const loop = startHeartbeatLoop({
+      getSecret: () => SECRET,
+      getSample: () => ({
+        camera_ok: true,
+        render_fps: 30,
+        metrics: { try_on_selections: 2, category_top: 1 },
+      }),
+      intervalMs: 60_000,
+      fetchFn: async (_url, init) => {
+        body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return new Response(JSON.stringify({ status: 'ok' }), { status: 200 });
+      },
+    });
+
+    await loop.tick();
+    loop.stop();
+
+    expect(body?.['metrics']).toEqual({ try_on_selections: 2, category_top: 1 });
+    expect(JSON.stringify(body)).not.toMatch(/frame|pixel|image|device_secret|storage_path/i);
+  });
+
   it('surfaces a revoked credential without throwing', async () => {
     let unauthorized = false;
     const loop = startHeartbeatLoop({
