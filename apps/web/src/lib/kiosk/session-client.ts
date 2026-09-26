@@ -173,6 +173,12 @@ export async function endKioskSession(
 /**
  * Maps a status poll onto a kiosk event. Does not call activate or end;
  * the shell does that after the machine accepts the event.
+ *
+ * A missing live row (null) means the local session is gone — phone left,
+ * expired, or staff-ended. A live row with a *different* session id is
+ * not treated as ended: after END → create, a stale or eventually-consistent
+ * poll can still observe the previous row, and ending on mismatch tears
+ * down the fresh WAITING QR. Same-id ENDED/EXPIRED/expiry still ends.
  */
 export function eventFromLiveSession(
   live: LiveKioskSession | null,
@@ -181,8 +187,12 @@ export function eventFromLiveSession(
 ): 'PAIRING_CLAIMED' | 'SESSION_ENDED' | null {
   if (!localSessionId) return null;
 
-  if (!live || live.sessionId !== localSessionId) {
+  if (!live) {
     return 'SESSION_ENDED';
+  }
+
+  if (live.sessionId !== localSessionId) {
+    return null;
   }
 
   if (live.status === 'ENDED' || live.status === 'EXPIRED') {

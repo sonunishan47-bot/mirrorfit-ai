@@ -207,7 +207,9 @@ describe('live session read', () => {
     expect(live?.selectedGarment).toBeNull();
   });
 
-  it('ends the local session when the live session is a different id', () => {
+  it('does not end the local session when the live row is a different id', () => {
+    // Mismatch alone is transitional (stale poll / eventual consistency after
+    // END → create). Ending here would clear a fresh WAITING QR.
     expect(
       eventFromLiveSession(
         {
@@ -222,7 +224,7 @@ describe('live session read', () => {
         SESSION_ID,
         Date.now(),
       ),
-    ).toBe('SESSION_ENDED');
+    ).toBeNull();
   });
 });
 
