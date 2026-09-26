@@ -3,11 +3,13 @@ import { cn } from '@mirrorfit/ui';
 export function PrimaryButton({
   children,
   busy = false,
+  busyLabel = 'Connecting…',
   disabled = false,
   onClick,
 }: {
   children: string;
   busy?: boolean;
+  busyLabel?: string;
   disabled?: boolean;
   onClick: () => void;
 }) {
@@ -24,7 +26,7 @@ export function PrimaryButton({
         'disabled:cursor-wait disabled:opacity-70',
       )}
     >
-      {busy ? 'Connecting…' : children}
+      {busy ? busyLabel : children}
     </button>
   );
 }

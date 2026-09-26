@@ -8,7 +8,10 @@ export interface CustomerCatalogItem {
   readonly isTestFixture: boolean;
   readonly sizes: readonly string[];
   readonly hasThumbnail: boolean;
+  readonly hasOverlay: boolean;
   readonly fittingAvailable: boolean;
+  readonly priceMinor: number | null;
+  readonly currencyCode: string | null;
 }
 
 export async function listSessionCatalog(
@@ -39,6 +42,14 @@ export async function listSessionCatalog(
     ) {
       continue;
     }
+    const priceMinor =
+      typeof record['price_minor'] === 'number' && Number.isFinite(record['price_minor'])
+        ? record['price_minor']
+        : null;
+    const currencyCode =
+      typeof record['currency_code'] === 'string' && /^[A-Z]{3}$/.test(record['currency_code'])
+        ? record['currency_code']
+        : null;
     items.push({
       garmentId: record['garment_id'],
       variantId: record['variant_id'],
@@ -48,7 +59,10 @@ export async function listSessionCatalog(
       colorName: record['color_name'],
       isTestFixture: record['is_test_fixture'] === true,
       hasThumbnail: record['has_thumbnail'] === true,
+      hasOverlay: record['has_overlay'] === true,
       fittingAvailable: record['fitting_available'] === true,
+      priceMinor,
+      currencyCode,
       sizes: Array.isArray(record['sizes'])
         ? record['sizes'].filter((value): value is string => typeof value === 'string')
         : [],

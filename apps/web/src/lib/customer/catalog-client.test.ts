@@ -35,13 +35,16 @@ describe('customer catalog client', () => {
         colorName: 'Black',
         isTestFixture: false,
         hasThumbnail: false,
+        hasOverlay: false,
         fittingAvailable: false,
+        priceMinor: null,
+        currencyCode: null,
         sizes: ['M'],
       },
     ]);
   });
 
-  it('maps brand and fitting_available when the API provides them', async () => {
+  it('maps brand, fitting_available, and has_overlay when the API provides them', async () => {
     const items = await listSessionCatalog(TOKEN, () => {
       return Promise.resolve(
         new Response(
@@ -56,7 +59,10 @@ describe('customer catalog client', () => {
                 color_name: 'Fixture Blue',
                 is_test_fixture: true,
                 has_thumbnail: false,
+                has_overlay: true,
                 fitting_available: true,
+                price_minor: 0,
+                currency_code: 'USD',
                 sizes: ['S', 'M'],
               },
             ],
@@ -67,7 +73,10 @@ describe('customer catalog client', () => {
     });
     expect(items?.[0]?.brand).toBe('MirrorFit Lab');
     expect(items?.[0]?.fittingAvailable).toBe(true);
+    expect(items?.[0]?.hasOverlay).toBe(true);
     expect(items?.[0]?.isTestFixture).toBe(true);
+    expect(items?.[0]?.priceMinor).toBe(0);
+    expect(items?.[0]?.currencyCode).toBe('USD');
   });
 
   it('returns an empty list when the shop has no garments', async () => {
