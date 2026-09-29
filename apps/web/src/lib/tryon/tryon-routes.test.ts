@@ -19,6 +19,8 @@ describe('try-on route boundaries', () => {
     expect(route).not.toMatch(/organization_id|shop_id|display_id/);
     expect(service).toContain("kind: 'PHOTO_TRYON_UPLOAD'");
     expect(service).toContain('consent_id: consentId');
+    expect(service).toContain('validateStillDimensions');
+    expect(service).toContain('staleCompletionReason');
     expect(service).toContain('TRYON_PRIVATE_BUCKET');
     expect(service).not.toContain('garment-assets');
   });
@@ -48,8 +50,11 @@ describe('try-on route boundaries', () => {
 
   it('fails a missing model instead of painting a fake result', () => {
     const worker = source('scripts/tryon-worker.mjs');
+    const provider = source('src/lib/tryon/vton-provider.ts');
     expect(worker).toContain('VTON_NOT_CONNECTED');
-    expect(worker).not.toMatch(/createTestFixture|fillRect|fake/i);
-    expect(worker).toContain('The browser never calls RunPod');
+    expect(worker).toContain('The browser never calls the GPU');
+    expect(provider).toContain('generateStill');
+    expect(provider).toContain('WORKER_ENDPOINT_URL');
+    expect(`${worker}\n${provider}`).not.toMatch(/createTestFixture|fillRect/i);
   });
 });

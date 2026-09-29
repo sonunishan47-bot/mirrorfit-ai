@@ -9,6 +9,7 @@ import {
   failureNeedsCode,
   photorealResultVisible,
   resultMatchesSelection,
+  staleCompletionReason,
   transitionAllowed,
   variantBelongsToDeviceShop,
 } from './tryon-job-policy';
@@ -95,6 +96,15 @@ describe('try-on job transitions', () => {
     expect(transitionAllowed('SUCCEEDED', 'SUCCEEDED')).toBe(false);
     expect(failureNeedsCode('FAILED', '')).toBe(false);
     expect(failureNeedsCode('FAILED', 'VTON_NOT_CONNECTED')).toBe(true);
+    expect(staleCompletionReason({ sessionStatus: 'ENDED', newerSelectionExists: false })).toBe(
+      'SESSION_ENDED',
+    );
+    expect(staleCompletionReason({ sessionStatus: 'ACTIVE', newerSelectionExists: true })).toBe(
+      'STALE_SELECTION',
+    );
+    expect(
+      staleCompletionReason({ sessionStatus: 'ACTIVE', newerSelectionExists: false }),
+    ).toBeNull();
   });
 
   it('does not let an older garment result count for a newer selection', () => {

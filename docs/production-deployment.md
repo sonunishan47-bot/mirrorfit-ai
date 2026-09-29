@@ -49,7 +49,7 @@ supabase gen types typescript --project-id <project-ref> \
 
 Production garment overlays use the private `garment-assets` Storage bucket (see migration `*_garment_assets_storage_bucket.sql`). Overlays leave the server only as short-lived **service-role signed URLs** after device auth — never as public objects.
 
-Optional realistic try-on stills use a separate private `tryon-private` bucket (`*_tryon_private_bucket.sql`). Apply that migration before enabling the worker. The browser never receives the bucket path. `WORKER_SECRET` (16+ characters) and `RUNPOD_ENDPOINT_URL` are optional server/pod variables; if the endpoint is unset the provider stays **not connected** and jobs fail with `VTON_NOT_CONNECTED` instead of a fake image. Run `node apps/web/scripts/tryon-worker.mjs` on the pod (RTX 4090 24GB, EU, no public GPU port). The mirror does not call RunPod.
+Optional realistic try-on stills use a separate private `tryon-private` bucket (`*_tryon_private_bucket.sql`). Apply that migration before enabling the worker. The browser never receives the bucket path. `WORKER_SECRET` (16+ characters) and `WORKER_ENDPOINT_URL` are optional and are not part of the client bundle. `RUNPOD_ENDPOINT_URL` is a legacy alias for the same private URL. If the endpoint is unset the provider stays **not connected** and jobs fail with `VTON_NOT_CONNECTED` instead of a fake image. See `docs/vton-pre-gpu.md`. Run `pnpm --filter @mirrorfit/web tryon-worker` on the GPU machine (RTX 4090 24GB is enough for current still-image VTON; no public GPU port). The mirror does not call the GPU.
 
 ## MediaPipe assets
 

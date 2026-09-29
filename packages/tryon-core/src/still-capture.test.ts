@@ -8,8 +8,10 @@ import {
   STILL_JPEG_QUALITY,
   STILL_LONG_EDGE_PX,
   isJpegPayload,
+  jpegDimensions,
   scaledStillSize,
   stillCaptureDecision,
+  validateStillDimensions,
   validateStillJpeg,
 } from './still-capture';
 
@@ -69,6 +71,40 @@ describe('still capture policy', () => {
     const png = new Uint8Array(2048);
     png[0] = 0x89;
     expect(validateStillJpeg(png)).toEqual({ ok: false, reason: 'NOT_JPEG' });
+    expect(validateStillDimensions(jpeg)).toEqual({ ok: false, reason: 'UNREADABLE' });
+  });
+
+  it('reads SOF dimensions and rejects tiny or huge frames', () => {
+    const width = 1280;
+    const height = 720;
+    const sof = new Uint8Array([
+      0xff,
+      0xc0,
+      0x00,
+      0x0b,
+      0x08,
+      height >> 8,
+      height & 0xff,
+      width >> 8,
+      width & 0xff,
+      0x01,
+      0x01,
+      0x11,
+      0x00,
+    ]);
+    const bytes = new Uint8Array(1200);
+    bytes[0] = 0xff;
+    bytes[1] = 0xd8;
+    bytes[2] = 0xff;
+    bytes.set(sof, 3);
+    expect(jpegDimensions(bytes)).toEqual({ width, height });
+    expect(validateStillDimensions(bytes).ok).toBe(true);
+    const tiny = new Uint8Array(bytes);
+    tiny[8] = 0;
+    tiny[9] = 16;
+    tiny[10] = 0;
+    tiny[11] = 16;
+    expect(validateStillDimensions(tiny)).toEqual({ ok: false, reason: 'TOO_SMALL_EDGE' });
   });
 });
 

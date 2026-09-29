@@ -59,6 +59,61 @@ export function isJpegPayload(bytes: Uint8Array): boolean {
   return bytes.byteLength >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
 }
 
+/** Smallest side we will store. Rejects padded headers that are not a picture. */
+export const STILL_MIN_EDGE_PX = 64;
+
+/** Largest side. A 1280px still is far below this; it blocks decompression bombs. */
+export const STILL_MAX_EDGE_PX = 4096;
+
+/**
+ * Reads width and height from a JPEG SOF marker.
+ * Does not decode pixels and does not accept a header with no frame.
+ */
+export function jpegDimensions(
+  bytes: Uint8Array,
+): { readonly width: number; readonly height: number } | null {
+  if (!isJpegPayload(bytes)) return null;
+  let index = 2;
+  while (index < bytes.length) {
+    if (bytes[index] !== 0xff) return null;
+    index += 1;
+    while (index < bytes.length && bytes[index] === 0xff) index += 1;
+    if (index >= bytes.length) return null;
+    const marker = bytes[index] ?? 0;
+    index += 1;
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+    if (marker === 0xd9 || marker === 0xda) return null;
+    if (index + 1 >= bytes.length) return null;
+    const length = ((bytes[index] ?? 0) << 8) | (bytes[index + 1] ?? 0);
+    if (length < 2 || index + length > bytes.length) return null;
+    const sof =
+      marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+    if (sof) {
+      if (length < 7) return null;
+      const height = ((bytes[index + 3] ?? 0) << 8) | (bytes[index + 4] ?? 0);
+      const width = ((bytes[index + 5] ?? 0) << 8) | (bytes[index + 6] ?? 0);
+      if (width <= 0 || height <= 0) return null;
+      return { width, height };
+    }
+    index += length;
+  }
+  return null;
+}
+
+export function validateStillDimensions(
+  bytes: Uint8Array,
+):
+  | { readonly ok: true; readonly width: number; readonly height: number }
+  | { readonly ok: false; readonly reason: 'UNREADABLE' | 'TOO_SMALL_EDGE' | 'TOO_LARGE_EDGE' } {
+  const size = jpegDimensions(bytes);
+  if (!size) return { ok: false, reason: 'UNREADABLE' };
+  const longEdge = Math.max(size.width, size.height);
+  const shortEdge = Math.min(size.width, size.height);
+  if (shortEdge < STILL_MIN_EDGE_PX) return { ok: false, reason: 'TOO_SMALL_EDGE' };
+  if (longEdge > STILL_MAX_EDGE_PX) return { ok: false, reason: 'TOO_LARGE_EDGE' };
+  return { ok: true, width: size.width, height: size.height };
+}
+
 export function validateStillJpeg(
   bytes: Uint8Array,
 ):

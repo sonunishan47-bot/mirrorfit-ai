@@ -114,3 +114,17 @@ export function photorealResultVisible(input: {
     { garmentId: input.selectedGarmentId, variantId: input.selectedVariantId },
   );
 }
+
+/**
+ * A SUCCEEDED completion is refused when the session is no longer active or a
+ * newer garment job exists. The caller records FAILED instead of publishing
+ * the late image.
+ */
+export function staleCompletionReason(input: {
+  readonly sessionStatus: string;
+  readonly newerSelectionExists: boolean;
+}): 'SESSION_ENDED' | 'STALE_SELECTION' | null {
+  if (input.sessionStatus !== 'ACTIVE') return 'SESSION_ENDED';
+  if (input.newerSelectionExists) return 'STALE_SELECTION';
+  return null;
+}

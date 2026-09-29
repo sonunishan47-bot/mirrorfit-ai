@@ -1,6 +1,10 @@
 import 'server-only';
 
-import { validateStillJpeg } from '@mirrorfit/tryon-core';
+import {
+  resolveFitCategory,
+  validateStillDimensions,
+  validateStillJpeg,
+} from '@mirrorfit/tryon-core';
 
 import type { ClientErrorCode } from '@/lib/api/errors';
 import { garmentAssetObjectPath } from '@/lib/catalog/garment-asset-storage';
@@ -14,10 +18,11 @@ import {
   completionAllowed,
   deviceMayStartTryOn,
   failureNeedsCode,
+  staleCompletionReason,
   transitionAllowed,
   variantBelongsToDeviceShop,
 } from './tryon-job-policy';
-import { readVtonProviderConfig } from './vton-provider';
+import { categoryAllowed, readVtonProviderConfig, vtonCapabilities } from './vton-provider';
 
 const SIGNED_URL_TTL_SECONDS = 120;
 
@@ -37,7 +42,8 @@ export async function createDeviceTryOnJob(input: {
   readonly jpeg: Uint8Array;
 }): Promise<{ ok: true; job: CreatedTryOnJob } | { ok: false; error: ClientErrorCode }> {
   const jpegCheck = validateStillJpeg(input.jpeg);
-  if (!jpegCheck.ok) return { ok: false, error: 'INVALID_REQUEST' };
+  const dimensions = validateStillDimensions(input.jpeg);
+  if (!jpegCheck.ok || !dimensions.ok) return { ok: false, error: 'INVALID_REQUEST' };
   if (!input.policyVersion.trim()) return { ok: false, error: 'INVALID_REQUEST' };
 
   const supabase = createSupabaseAdminClient();
@@ -199,6 +205,10 @@ export async function claimNextTryOnJob(): Promise<
         variant_id: string;
         input_url: string;
         garment_reference_url: string | null;
+        garment_category: string | null;
+        fit_category: 'TOP' | 'LOWER_BODY' | 'FULL_BODY' | null;
+        category_supported: boolean;
+        mode: 'still';
         vton_provider: 'not_connected' | 'configured';
       };
     }
@@ -249,6 +259,8 @@ export async function claimNextTryOnJob(): Promise<
     queued.garment_id,
     queued.variant_id,
   );
+  const garmentCategory = await loadGarmentCategory(supabase, queued.garment_id);
+  const fitCategory = resolveFitCategory(garmentCategory);
 
   return {
     ok: true,
@@ -259,6 +271,10 @@ export async function claimNextTryOnJob(): Promise<
       variant_id: queued.variant_id,
       input_url: signed.data.signedUrl,
       garment_reference_url: reference,
+      garment_category: garmentCategory,
+      fit_category: fitCategory,
+      category_supported: categoryAllowed(fitCategory, vtonCapabilities()),
+      mode: 'still',
       vton_provider: readVtonProviderConfig().status,
     },
   };
@@ -272,20 +288,43 @@ export async function completeTryOnJob(input: {
 }): Promise<{ ok: true } | { ok: false; error: ClientErrorCode }> {
   if (!failureNeedsCode(input.status, input.errorCode))
     return { ok: false, error: 'INVALID_REQUEST' };
-  if (input.status === 'SUCCEEDED') {
-    if (!input.jpeg || !validateStillJpeg(input.jpeg).ok)
-      return { ok: false, error: 'INVALID_REQUEST' };
-  }
 
   const supabase = createSupabaseAdminClient();
   const { data: job, error } = await supabase
     .from('tryon_jobs')
-    .select('id, status, session_id, organization_id, shop_id')
+    .select('id, status, session_id, organization_id, shop_id, queued_at')
     .eq('id', input.jobId)
     .maybeSingle();
   if (error || !job) return { ok: false, error: 'INVALID_REQUEST' };
   if (!completionAllowed(job.status) || !transitionAllowed(job.status, input.status)) {
     return { ok: false, error: 'INVALID_REQUEST' };
+  }
+
+  if (input.status === 'SUCCEEDED') {
+    const session = await loadSession(supabase, job.session_id);
+    const newer = await supabase
+      .from('tryon_jobs')
+      .select('id')
+      .eq('session_id', job.session_id)
+      .gt('queued_at', job.queued_at)
+      .neq('id', job.id)
+      .limit(1);
+    const stale = staleCompletionReason({
+      sessionStatus: session?.status ?? 'ENDED',
+      newerSelectionExists: Boolean(newer.data && newer.data.length > 0),
+    });
+    if (stale) {
+      await failRunningJob(supabase, job.id, stale);
+      return { ok: false, error: 'INVALID_REQUEST' };
+    }
+    if (
+      !input.jpeg ||
+      !validateStillJpeg(input.jpeg).ok ||
+      !validateStillDimensions(input.jpeg).ok
+    ) {
+      await failRunningJob(supabase, job.id, 'INVALID_OUTPUT');
+      return { ok: false, error: 'INVALID_REQUEST' };
+    }
   }
 
   let outputPath: string | null = null;
@@ -323,6 +362,36 @@ export async function completeTryOnJob(input: {
     return { ok: false, error: 'INVALID_REQUEST' };
   }
   return { ok: true };
+}
+
+async function failRunningJob(
+  supabase: AdminClient,
+  jobId: string,
+  errorCode: string,
+): Promise<void> {
+  await supabase
+    .from('tryon_jobs')
+    .update({
+      status: 'FAILED',
+      error_code: errorCode,
+      output_path: null,
+      finished_at: new Date().toISOString(),
+    })
+    .eq('id', jobId)
+    .eq('status', 'RUNNING');
+}
+
+async function loadGarmentCategory(
+  supabase: AdminClient,
+  garmentId: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('garments')
+    .select('category')
+    .eq('id', garmentId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data.category;
 }
 
 async function loadSession(supabase: AdminClient, sessionId: string) {
