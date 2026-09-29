@@ -3,6 +3,7 @@ import 'server-only';
 import {
   resolveFitCategory,
   validateStillDimensions,
+  validateStillFraming,
   validateStillJpeg,
 } from '@mirrorfit/tryon-core';
 
@@ -317,11 +318,13 @@ export async function completeTryOnJob(input: {
       await failRunningJob(supabase, job.id, stale);
       return { ok: false, error: 'INVALID_REQUEST' };
     }
-    if (
-      !input.jpeg ||
-      !validateStillJpeg(input.jpeg).ok ||
-      !validateStillDimensions(input.jpeg).ok
-    ) {
+    const jpeg = input.jpeg;
+    if (!jpeg || !validateStillJpeg(jpeg).ok) {
+      await failRunningJob(supabase, job.id, 'INVALID_OUTPUT');
+      return { ok: false, error: 'INVALID_REQUEST' };
+    }
+    const dimensions = validateStillDimensions(jpeg);
+    if (!dimensions.ok || !validateStillFraming(dimensions.width, dimensions.height).ok) {
       await failRunningJob(supabase, job.id, 'INVALID_OUTPUT');
       return { ok: false, error: 'INVALID_REQUEST' };
     }

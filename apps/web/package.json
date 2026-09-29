@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "0.10.32",
+    "@mirrorfit/experience": "workspace:*",
     "@mirrorfit/protocol": "workspace:*",
     "@mirrorfit/tryon-core": "workspace:*",
     "@mirrorfit/types": "workspace:*",
@@ -29,11 +30,13 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "0.0.1",
+    "three": "0.172.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",
     "@types/qrcode": "1.5.6",
+    "@types/three": "0.172.0",
     "selfsigned": "5.5.0",
     "tailwindcss": "4.3.3"
   }

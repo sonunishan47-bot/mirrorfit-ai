@@ -14,6 +14,7 @@ const workspacePackages = [
   '@mirrorfit/validation',
   '@mirrorfit/protocol',
   '@mirrorfit/tryon-core',
+  '@mirrorfit/experience',
   '@mirrorfit/ui',
 ];
 

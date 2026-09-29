@@ -34,6 +34,7 @@ import {
   type PoseProvider,
   type WarpParallelogram,
 } from '@mirrorfit/tryon-core';
+import { gestureFromJoints } from '@mirrorfit/experience';
 import type { TryOnRuntimeStatus } from '@mirrorfit/types';
 
 import { loadDeviceCredential } from '@/lib/device/store';
@@ -62,6 +63,7 @@ export function TryOnPanel({
   selectedCategory,
   selectedIsTestFixture = false,
   onPresenceChange,
+  onGesture,
   /** Full-bleed host above the camera (and above the dim scrim). */
   overlayRoot = null,
 }: {
@@ -73,12 +75,16 @@ export function TryOnPanel({
   selectedIsTestFixture?: boolean;
   /** Optional wake signal for kiosk power-save — person seen / lost only. */
   onPresenceChange?: (present: boolean) => void;
+  /** Raised-hand signal for the 3D mannequin. Does not change the 2D overlay. */
+  onGesture?: (command: 'next-view' | 'next-size') => void;
   overlayRoot?: HTMLElement | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const getFrameRef = useRef(getFrame);
   const garmentRef = useRef({ selectedGarment, selectedCategory, selectedIsTestFixture });
   const presenceRef = useRef(onPresenceChange);
+  const gestureRef = useRef(onGesture);
+  const gestureAtRef = useRef(0);
   const statusRef = useRef<TryOnRuntimeStatus>('CAMERA_READY');
   const [status, setStatus] = useState<TryOnRuntimeStatus>('CAMERA_READY');
   const [reason, setReason] = useState<string | null>(null);
@@ -94,7 +100,15 @@ export function TryOnPanel({
     getFrameRef.current = getFrame;
     garmentRef.current = { selectedGarment, selectedCategory, selectedIsTestFixture };
     presenceRef.current = onPresenceChange;
-  }, [getFrame, selectedGarment, selectedCategory, selectedIsTestFixture, onPresenceChange]);
+    gestureRef.current = onGesture;
+  }, [
+    getFrame,
+    selectedGarment,
+    selectedCategory,
+    selectedIsTestFixture,
+    onPresenceChange,
+    onGesture,
+  ]);
 
   useEffect(() => {
     statusRef.current = status;
@@ -345,6 +359,22 @@ export function TryOnPanel({
                   });
                   move('PERSON_SEEN');
                   presenceRef.current?.(true);
+                  const command = gestureFromJoints({
+                    leftWristY:
+                      landmarks.keypoints.find((point) => point.name === 'LEFT_WRIST')?.y ?? null,
+                    rightWristY:
+                      landmarks.keypoints.find((point) => point.name === 'RIGHT_WRIST')?.y ?? null,
+                    leftShoulderY:
+                      landmarks.keypoints.find((point) => point.name === 'LEFT_SHOULDER')?.y ??
+                      null,
+                    rightShoulderY:
+                      landmarks.keypoints.find((point) => point.name === 'RIGHT_SHOULDER')?.y ??
+                      null,
+                  });
+                  if (command && frame.timestampMs - gestureAtRef.current > 1600) {
+                    gestureAtRef.current = frame.timestampMs;
+                    gestureRef.current?.(command);
+                  }
                 } else {
                   // Person lost — drop any held overlay so we do not freeze a ghost shirt.
                   fitting.clearHeldFit();

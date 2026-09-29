@@ -12,6 +12,7 @@ import {
   scaledStillSize,
   stillCaptureDecision,
   validateStillDimensions,
+  validateStillFraming,
   validateStillJpeg,
 } from './still-capture';
 
@@ -105,6 +106,8 @@ describe('still capture policy', () => {
     tiny[10] = 0;
     tiny[11] = 16;
     expect(validateStillDimensions(tiny)).toEqual({ ok: false, reason: 'TOO_SMALL_EDGE' });
+    expect(validateStillFraming(width, height).ok).toBe(true);
+    expect(validateStillFraming(4000, 400)).toEqual({ ok: false, reason: 'BAD_ASPECT' });
   });
 });
 

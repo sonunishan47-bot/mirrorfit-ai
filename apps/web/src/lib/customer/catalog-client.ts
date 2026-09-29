@@ -1,3 +1,5 @@
+import { SIZE_LABELS } from '@mirrorfit/types';
+
 export interface CustomerCatalogItem {
   readonly garmentId: string;
   readonly variantId: string;
@@ -87,7 +89,7 @@ export async function listSessionCatalog(
 
 export async function selectSessionGarment(
   token: string,
-  garment: { garmentId: string; variantId: string; category?: string } | null,
+  garment: { garmentId: string; variantId: string; category?: string; sizeLabel?: string } | null,
   fetchFn: typeof fetch = fetch,
 ): Promise<boolean> {
   let response: Response;
@@ -101,10 +103,13 @@ export async function selectSessionGarment(
       body: JSON.stringify(
         garment
           ? {
-            garment_id: garment.garmentId,
-            variant_id: garment.variantId,
-            category: garment.category,
-          }
+              garment_id: garment.garmentId,
+              variant_id: garment.variantId,
+              category: garment.category,
+              ...(garment.sizeLabel && SIZE_LABELS.some((label) => label === garment.sizeLabel)
+                ? { size_label: garment.sizeLabel }
+                : {}),
+            }
           : { garment_id: null, variant_id: null },
       ),
     });

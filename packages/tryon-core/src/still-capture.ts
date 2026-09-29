@@ -114,6 +114,22 @@ export function validateStillDimensions(
   return { ok: true, width: size.width, height: size.height };
 }
 
+/**
+ * Rejects panorama strips and slivers. A 1280×720 laptop still is allowed.
+ * This does not judge beauty or invent a replacement.
+ */
+export function validateStillFraming(
+  width: number,
+  height: number,
+): { readonly ok: true } | { readonly ok: false; readonly reason: 'BAD_ASPECT' } {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return { ok: false, reason: 'BAD_ASPECT' };
+  }
+  const ratio = width / height;
+  if (ratio < 0.4 || ratio > 2.2) return { ok: false, reason: 'BAD_ASPECT' };
+  return { ok: true };
+}
+
 export function validateStillJpeg(
   bytes: Uint8Array,
 ):

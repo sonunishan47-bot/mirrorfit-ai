@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FrameRateCounter, resolveFitCategory } from '@mirrorfit/tryon-core';
 
 import { ClientErrorBoundary } from '@/components/client-error-boundary';
+import { MannequinDock } from '@/components/mirror/mannequin-dock';
 import { BrowserCameraProvider, describeCameraStartError } from '@/lib/camera/browser-camera';
 import { resolveCameraPresence } from '@/lib/camera/camera-presence';
 import { startHeartbeatLoop } from '@/lib/device/heartbeat-loop';
@@ -98,6 +99,12 @@ export function KioskShell() {
     variantId: string;
     category?: string | null;
     isTestFixture?: boolean;
+    colorName?: string | null;
+    sizeLabel?: string | null;
+  } | null>(null);
+  const [gesture, setGesture] = useState<{
+    id: number;
+    command: 'next-view' | 'next-size';
   } | null>(null);
 
   const view = presentKiosk(status);
@@ -375,7 +382,9 @@ export function KioskShell() {
               current?.garmentId === next?.garmentId &&
               current?.variantId === next?.variantId &&
               current?.category === next?.category &&
-              current?.isTestFixture === next?.isTestFixture
+              current?.isTestFixture === next?.isTestFixture &&
+              current?.colorName === next?.colorName &&
+              current?.sizeLabel === next?.sizeLabel
             ) {
               return current;
             }
@@ -608,20 +617,40 @@ export function KioskShell() {
                         noteActivity(true);
                       }
                     }}
+                    onGesture={(command) => {
+                      setGesture((current) => ({ id: (current?.id ?? 0) + 1, command }));
+                    }}
+                  />
+                  <MannequinDock
+                    category={selectedGarment?.category ?? null}
+                    colorName={selectedGarment?.colorName ?? null}
+                    sizeLabel={selectedGarment?.sizeLabel ?? null}
+                    gesture={gesture}
                   />
                 </ClientErrorBoundary>
               ) : null}
 
               {status === 'ACTIVE' || status === 'PAIRED' || status === 'WAITING' ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    void onEndSession();
-                  }}
-                  className="text-xs uppercase tracking-[0.25em] text-muted underline-offset-4 hover:text-secondary hover:underline"
-                >
-                  End session
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void document.documentElement.requestFullscreen?.();
+                    }}
+                    className="text-xs uppercase tracking-[0.25em] text-muted underline-offset-4 hover:text-secondary hover:underline"
+                  >
+                    Full screen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void onEndSession();
+                    }}
+                    className="text-xs uppercase tracking-[0.25em] text-muted underline-offset-4 hover:text-secondary hover:underline"
+                  >
+                    End session
+                  </button>
+                </>
               ) : null}
             </>
           )}

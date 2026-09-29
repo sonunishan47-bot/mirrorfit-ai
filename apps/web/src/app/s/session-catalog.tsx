@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { cn } from '@mirrorfit/ui';
+import {
+  CATALOG_CACHE_STORAGE_KEY,
+  cacheIsFresh,
+  sanitizeCatalogCache,
+} from '@mirrorfit/experience';
 
 import { GarmentCard } from '@/components/customer/garment-card';
 import { PrimaryButton } from '@/components/customer/primary-button';
@@ -23,6 +28,7 @@ import {
 } from '@/lib/customer/catalog-client';
 import { fixtureCatalogThumbnailSrc } from '@/lib/customer/fixture-catalog-thumbnail';
 import { shareProductLook, type ShareableProduct } from '@/lib/customer/product-share';
+import { LookDesk } from '@/components/customer/look-desk';
 
 type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
 type LoadStatus = 'loading' | 'ready' | 'empty' | 'error';
@@ -35,11 +41,7 @@ type ShareStatus = 'idle' | 'sharing' | 'shared' | 'copied' | 'error';
  * is accepted as an argument and is never rendered. Selection sync uses a
  * generation guard so rapid taps cannot race the kiosk garment state.
  */
-export function SessionCatalog({
-  readToken,
-}: {
-  readToken: () => string | null;
-}) {
+export function SessionCatalog({ readToken }: { readToken: () => string | null }) {
   const [items, setItems] = useState<CustomerCatalogItem[] | null>(null);
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
   const [loadSlow, setLoadSlow] = useState(false);
@@ -53,6 +55,7 @@ export function SessionCatalog({
   const [expandedGarmentId, setExpandedGarmentId] = useState<string | null>(null);
   const [shareStatus, setShareStatus] = useState<ShareStatus>('idle');
   const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const [usingCache, setUsingCache] = useState(false);
 
   const guardRef = useRef(new CatalogSelectionGuard());
 
@@ -77,12 +80,25 @@ export function SessionCatalog({
       const catalog = await listSessionCatalog(token);
       if (cancelled) return;
       if (catalog === null) {
-        setItems([]);
-        setLoadStatus('error');
-        setLoadSlow(false);
+        const cached = readCachedCatalog();
+        if (!cancelled && cached) {
+          setItems(cached);
+          setLoadStatus(cached.length === 0 ? 'empty' : 'ready');
+          setUsingCache(true);
+          setLoadSlow(false);
+          return;
+        }
+        if (!cancelled) {
+          setItems([]);
+          setLoadStatus('error');
+          setUsingCache(false);
+          setLoadSlow(false);
+        }
         return;
       }
       setItems(catalog);
+      setUsingCache(false);
+      writeCatalogCache(catalog);
       setLoadStatus(catalog.length === 0 ? 'empty' : 'ready');
       setLoadSlow(false);
     })();
@@ -111,14 +127,11 @@ export function SessionCatalog({
     };
   }, []);
 
-  const filtered = useMemo(
-    () => (items ? filterCatalogItems(items, filter) : []),
-    [items, filter],
-  );
+  const filtered = useMemo(() => (items ? filterCatalogItems(items, filter) : []), [items, filter]);
   const groups = useMemo(() => groupCatalogByGarment(filtered), [filtered]);
 
   const syncSelection = useCallback(
-    async (item: CustomerCatalogItem | null): Promise<void> => {
+    async (item: CustomerCatalogItem | null, sizeOverride?: string | null): Promise<void> => {
       const token = readToken();
       if (!token) return;
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -129,10 +142,16 @@ export function SessionCatalog({
 
       const generation = guardRef.current.begin();
       setSyncStatus('syncing');
+      const sizeLabel = sizeOverride === undefined ? selectedSize : sizeOverride;
       const ok = await selectSessionGarment(
         token,
         item
-          ? { garmentId: item.garmentId, variantId: item.variantId, category: item.category }
+          ? {
+              garmentId: item.garmentId,
+              variantId: item.variantId,
+              category: item.category,
+              ...(sizeLabel ? { sizeLabel } : {}),
+            }
           : null,
       );
       if (!guardRef.current.isCurrent(generation)) return;
@@ -148,7 +167,7 @@ export function SessionCatalog({
       }
       setSyncStatus('synced');
     },
-    [readToken],
+    [readToken, selectedSize],
   );
 
   async function chooseGroup(
@@ -158,10 +177,12 @@ export function SessionCatalog({
     const next = variant ?? group.variants[0] ?? null;
     if (!next) return;
     setExpandedGarmentId(group.garmentId);
-    if (group.sizes.length > 0 && selectedGarmentId !== group.garmentId) {
-      setSelectedSize(group.sizes[0] ?? null);
-    }
-    await syncSelection(next);
+    const sizeForGroup =
+      group.sizes.length > 0 && selectedGarmentId !== group.garmentId
+        ? (group.sizes[0] ?? null)
+        : selectedSize;
+    if (sizeForGroup !== selectedSize) setSelectedSize(sizeForGroup);
+    await syncSelection(next, sizeForGroup);
   }
 
   const selectedGroup = groups.find((g) => g.garmentId === selectedGarmentId) ?? null;
@@ -209,8 +230,8 @@ export function SessionCatalog({
       <div className="space-y-1">
         <h2 className="text-lg font-light tracking-tight text-customer-ink">Shop catalog</h2>
         <p className="text-sm text-customer-quiet">
-          Pick a garment to update the mirror. Fitting stays on the kiosk —
-          this phone never receives camera frames or product storage paths.
+          Pick a garment to update the mirror. Fitting stays on the kiosk — this phone never
+          receives camera frames or product storage paths.
         </p>
       </div>
 
@@ -238,6 +259,18 @@ export function SessionCatalog({
           {selectedSize ? ` · size ${selectedSize}` : ''}
         </p>
       ) : null}
+
+      <LookDesk
+        items={items ?? []}
+        selected={items?.find((item) => item.variantId === selectedVariantId) ?? null}
+        size={selectedSize}
+        readToken={readToken}
+        usingCache={usingCache}
+        onApply={(item, nextSize) => {
+          setSelectedSize(nextSize);
+          void syncSelection(item, nextSize);
+        }}
+      />
 
       <div
         className="flex flex-wrap gap-2"
@@ -283,8 +316,8 @@ export function SessionCatalog({
           </div>
           {loadSlow ? (
             <p className="pl-8 text-xs" data-testid="catalog-loading-slow">
-              Still waiting on the shop catalog. Check Wi‑Fi if this continues — you can retry
-              below if it fails.
+              Still waiting on the shop catalog. Check Wi‑Fi if this continues — you can retry below
+              if it fails.
             </p>
           ) : null}
         </div>
@@ -293,10 +326,7 @@ export function SessionCatalog({
           <p className="text-sm text-customer-quiet">
             The catalog could not be loaded. The mirror session is still available.
           </p>
-          <PrimaryButton
-            busyLabel="Retrying…"
-            onClick={() => setReloadKey((k) => k + 1)}
-          >
+          <PrimaryButton busyLabel="Retrying…" onClick={() => setReloadKey((k) => k + 1)}>
             Retry catalog
           </PrimaryButton>
         </div>
@@ -310,8 +340,7 @@ export function SessionCatalog({
         <ul className="space-y-4">
           {groups.map((group) => {
             const activeVariant =
-              group.variants.find((v) => v.variantId === selectedVariantId) ??
-              group.variants[0]!;
+              group.variants.find((v) => v.variantId === selectedVariantId) ?? group.variants[0]!;
             const isSelected = selectedGarmentId === group.garmentId;
             const isExpanded = expandedGarmentId === group.garmentId || isSelected;
             const price = formatCatalogPrice(group.priceMinor, group.currencyCode);
@@ -462,4 +491,60 @@ export function SessionCatalog({
       ) : null}
     </section>
   );
+}
+
+function writeCatalogCache(items: readonly CustomerCatalogItem[]): void {
+  try {
+    localStorage.setItem(
+      CATALOG_CACHE_STORAGE_KEY,
+      JSON.stringify({ savedAt: Date.now(), items: sanitizeCatalogCache([...items]) }),
+    );
+  } catch {
+    // A full or private browser store must not block the catalog.
+  }
+}
+
+function readCachedCatalog(): CustomerCatalogItem[] | null {
+  try {
+    const raw = localStorage.getItem(CATALOG_CACHE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { savedAt?: unknown; items?: unknown };
+    if (typeof parsed.savedAt !== 'number' || !cacheIsFresh(parsed.savedAt, Date.now()))
+      return null;
+    if (!Array.isArray(parsed.items)) return null;
+    const items: CustomerCatalogItem[] = [];
+    for (const row of parsed.items) {
+      if (!row || typeof row !== 'object') continue;
+      const record = row as Record<string, unknown>;
+      if (
+        typeof record['garmentId'] !== 'string' ||
+        typeof record['variantId'] !== 'string' ||
+        typeof record['name'] !== 'string' ||
+        typeof record['category'] !== 'string' ||
+        typeof record['colorName'] !== 'string'
+      ) {
+        continue;
+      }
+      items.push({
+        garmentId: record['garmentId'],
+        variantId: record['variantId'],
+        name: record['name'],
+        category: record['category'],
+        brand: typeof record['brand'] === 'string' ? record['brand'] : null,
+        colorName: record['colorName'],
+        isTestFixture: record['isTestFixture'] === true,
+        sizes: Array.isArray(record['sizes'])
+          ? record['sizes'].filter((value): value is string => typeof value === 'string')
+          : [],
+        hasThumbnail: record['hasThumbnail'] === true,
+        hasOverlay: record['hasOverlay'] === true,
+        fittingAvailable: record['fittingAvailable'] === true,
+        priceMinor: typeof record['priceMinor'] === 'number' ? record['priceMinor'] : null,
+        currencyCode: typeof record['currencyCode'] === 'string' ? record['currencyCode'] : null,
+      });
+    }
+    return items;
+  } catch {
+    return null;
+  }
 }

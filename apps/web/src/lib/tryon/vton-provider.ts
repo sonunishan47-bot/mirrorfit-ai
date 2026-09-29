@@ -1,4 +1,8 @@
-import { validateStillDimensions, validateStillJpeg } from '@mirrorfit/tryon-core';
+import {
+  validateStillDimensions,
+  validateStillFraming,
+  validateStillJpeg,
+} from '@mirrorfit/tryon-core';
 import type { GarmentFitCategory } from '@mirrorfit/types';
 
 /**
@@ -269,7 +273,11 @@ export async function generateStill(
       return { ok: false, error: 'VTON_UPSTREAM' };
     }
     const jpeg = new Uint8Array(await response.arrayBuffer());
-    if (!validateStillJpeg(jpeg).ok || !validateStillDimensions(jpeg).ok) {
+    const dimensions = validateStillDimensions(jpeg);
+    if (!validateStillJpeg(jpeg).ok || !dimensions.ok) {
+      return { ok: false, error: 'INVALID_OUTPUT' };
+    }
+    if (!validateStillFraming(dimensions.width, dimensions.height).ok) {
       return { ok: false, error: 'INVALID_OUTPUT' };
     }
     return { ok: true, jpeg };

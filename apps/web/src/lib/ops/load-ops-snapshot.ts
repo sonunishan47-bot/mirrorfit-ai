@@ -1,18 +1,20 @@
 import 'server-only';
 
+import {
+  PLAN_LIMITS,
+  gpuUsageEstimate,
+  readPlan,
+  usageAllowed,
+  whiteLabel,
+  type PlanId,
+  type PlanLimits,
+} from '@mirrorfit/experience';
 import type { StaffContext } from '@/lib/auth/staff';
 import { createSupabaseServerClient } from '@/lib/supabase/server-client';
 
 import { aggregateShopAnalytics, type ShopAnalyticsSummary } from './analytics-aggregate';
-import {
-  summarizeInventoryDistribution,
-  type InventoryDistribution,
-} from './inventory-summary';
-import {
-  classifyDisplayHealth,
-  summarizeKioskFleet,
-  type DisplayHealthRow,
-} from './kiosk-health';
+import { summarizeInventoryDistribution, type InventoryDistribution } from './inventory-summary';
+import { classifyDisplayHealth, summarizeKioskFleet, type DisplayHealthRow } from './kiosk-health';
 
 export interface OpsSnapshot {
   readonly shop_id: string | null;
@@ -21,6 +23,17 @@ export interface OpsSnapshot {
   readonly kiosks: readonly DisplayHealthRow[];
   readonly fleet: ReturnType<typeof summarizeKioskFleet>;
   readonly inventory: InventoryDistribution | null;
+  readonly brand: { readonly title: string; readonly subtitle: string };
+  readonly plan: PlanId;
+  readonly limits: PlanLimits;
+  readonly usage: {
+    readonly still_jobs_today: number | null;
+    readonly succeeded_stills_today: number | null;
+    readonly gpu_estimate_seconds: number | null;
+    readonly mirrors_online: number;
+    readonly stills_allowed: boolean | null;
+    readonly mirrors_allowed: boolean;
+  };
 }
 
 /**
@@ -119,12 +132,72 @@ export async function loadOpsSnapshot(
         )
       : null;
 
+  const fleet = summarizeKioskFleet(kiosks);
+  const plan = readPlan(process.env['MIRRORFIT_PLAN']);
+  const limits = PLAN_LIMITS[plan];
+  const dayStart = new Date(nowMs);
+  dayStart.setUTCHours(0, 0, 0, 0);
+  const dayIso = dayStart.toISOString();
+
+  const shopQuery = shopId
+    ? supabase.from('shops').select('name').eq('id', shopId).maybeSingle()
+    : Promise.resolve({ data: null, error: null });
+  const orgQuery = supabase
+    .from('organizations')
+    .select('name')
+    .eq('id', staff.organizationId)
+    .maybeSingle();
+  const jobsQuery = shopId
+    ? supabase
+        .from('tryon_jobs')
+        .select('id', { count: 'exact', head: true })
+        .eq('shop_id', shopId)
+        .gte('queued_at', dayIso)
+    : Promise.resolve({ count: null, error: null });
+  const succeededQuery = shopId
+    ? supabase
+        .from('tryon_jobs')
+        .select('id', { count: 'exact', head: true })
+        .eq('shop_id', shopId)
+        .eq('status', 'SUCCEEDED')
+        .gte('queued_at', dayIso)
+    : Promise.resolve({ count: null, error: null });
+
+  const [shopRow, orgRow, jobs, succeeded] = await Promise.all([
+    shopQuery,
+    orgQuery,
+    jobsQuery,
+    succeededQuery,
+  ]);
+
+  const stillJobsToday = jobs.error ? null : (jobs.count ?? 0);
+  const succeededToday = succeeded.error ? null : (succeeded.count ?? 0);
+  const allowance =
+    stillJobsToday === null
+      ? null
+      : usageAllowed(plan, { mirrorsOnline: fleet.online, stillJobsToday });
+
   return {
     shop_id: shopId,
     generated_at: new Date(nowMs).toISOString(),
     analytics,
     kiosks,
-    fleet: summarizeKioskFleet(kiosks),
+    fleet,
     inventory,
+    brand: whiteLabel({
+      shopName: shopRow.data?.name ?? null,
+      organizationName: orgRow.data?.name ?? null,
+    }),
+    plan,
+    limits,
+    usage: {
+      still_jobs_today: stillJobsToday,
+      succeeded_stills_today: succeededToday,
+      gpu_estimate_seconds:
+        succeededToday === null ? null : gpuUsageEstimate(succeededToday).billableSeconds,
+      mirrors_online: fleet.online,
+      stills_allowed: allowance ? allowance.stills : null,
+      mirrors_allowed: fleet.online <= limits.mirrors,
+    },
   };
 }

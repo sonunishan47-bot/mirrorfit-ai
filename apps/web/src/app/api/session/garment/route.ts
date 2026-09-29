@@ -29,10 +29,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     return clientError('INVALID_TOKEN');
   }
   const selected = await readSelectedGarment(session.sessionId);
-  return NextResponse.json(
-    { selected },
-    { headers: { 'Cache-Control': 'no-store' } },
-  );
+  return NextResponse.json({ selected }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function PUT(request: Request): Promise<NextResponse> {
@@ -59,6 +56,9 @@ export async function PUT(request: Request): Promise<NextResponse> {
           ...('category' in parsed.data && parsed.data.category
             ? { category: parsed.data.category }
             : {}),
+          ...('size_label' in parsed.data && parsed.data.size_label
+            ? { size_label: parsed.data.size_label }
+            : {}),
         };
 
   let persisted = selection;
@@ -75,8 +75,5 @@ export async function PUT(request: Request): Promise<NextResponse> {
     return clientError('INTERNAL');
   }
 
-  return NextResponse.json(
-    { selected: persisted },
-    { headers: { 'Cache-Control': 'no-store' } },
-  );
+  return NextResponse.json({ selected: persisted }, { headers: { 'Cache-Control': 'no-store' } });
 }

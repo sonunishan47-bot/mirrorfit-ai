@@ -4,9 +4,7 @@ B2B retail smart mirror platform. A customer scans a QR code on an in-store
 mirror, browses the shop catalog from their own phone, and sees the selected
 garment rendered live on the mirror display.
 
-**Current state: Phase 1 (foundation).** The monorepo, shared packages and
-Supabase wiring exist. The kiosk, catalog, pairing flow and fitting pipeline
-do not.
+**Current state.** The shop mirror pairs by QR, the phone browses that shop’s catalog, and shirts and pants track locally with MediaPipe. A consented still can be sent to a private GPU worker (`WORKER_ENDPOINT_URL`) without a fake image. Full-body garments are not warped in 2D. Size advice, a 3D mannequin, bilingual catalog commands, and plan quotas are in the app. They do not replace the live camera path, and they do not call a language model or a VTON checkpoint unless you connect one.
 
 ## Layout
 

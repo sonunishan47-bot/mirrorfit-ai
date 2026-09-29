@@ -5,6 +5,8 @@
  * paths, device secrets, or customer identifiers.
  */
 
+import { rollupSelections, type RetailRollup } from '@mirrorfit/experience';
+
 export interface OpsSessionRow {
   readonly id: string;
   readonly shop_id: string;
@@ -36,6 +38,7 @@ export interface ShopAnalyticsSummary {
   readonly garment_selections: number;
   readonly average_session_duration_ms: number | null;
   readonly category_engagement: readonly CategoryEngagement[];
+  readonly retail: RetailRollup;
 }
 
 function durationMs(session: OpsSessionRow): number | null {
@@ -46,12 +49,14 @@ function durationMs(session: OpsSessionRow): number | null {
   return end - start;
 }
 
+function textField(payload: unknown, key: string): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 function categoryFromPayload(payload: unknown): string {
-  if (!payload || typeof payload !== 'object') return 'unknown';
-  const record = payload as Record<string, unknown>;
-  const category = record['category'];
-  if (typeof category === 'string' && category.trim()) return category.trim();
-  return 'unknown';
+  return textField(payload, 'category') ?? 'unknown';
 }
 
 /**
@@ -80,11 +85,25 @@ export function aggregateShopAnalytics(
 
   const categoryCounts = new Map<string, number>();
   let garmentSelections = 0;
+  const retailRows: {
+    sessionId: string;
+    category: string | null;
+    color: string | null;
+    size: string | null;
+    garmentId: string | null;
+  }[] = [];
   for (const event of shopEvents) {
     if (event.type !== 'GARMENT_SELECTED') continue;
     garmentSelections += 1;
     const category = categoryFromPayload(event.payload);
     categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
+    retailRows.push({
+      sessionId: event.session_id,
+      category: textField(event.payload, 'category'),
+      color: textField(event.payload, 'color_name'),
+      size: textField(event.payload, 'size_label'),
+      garmentId: textField(event.payload, 'garment_id'),
+    });
   }
 
   const category_engagement = [...categoryCounts.entries()]
@@ -104,5 +123,6 @@ export function aggregateShopAnalytics(
     garment_selections: garmentSelections,
     average_session_duration_ms,
     category_engagement,
+    retail: rollupSelections(shopSessions.length, retailRows),
   };
 }

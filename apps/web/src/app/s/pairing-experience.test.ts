@@ -142,6 +142,8 @@ describe('customer /s pairing experience', () => {
   });
 
   it('never writes the pairing token into storage', async () => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
     renderPairing({ search: `?t=${TOKEN}` });
     await screen.findByRole('button', { name: 'Connect' });
     expect(window.localStorage.length).toBe(0);

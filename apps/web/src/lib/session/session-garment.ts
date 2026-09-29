@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { SizeLabel } from '@mirrorfit/types';
 import { selectedGarmentSchema } from '@mirrorfit/validation';
 
 import { isTestFixtureCatalogName } from '@/lib/catalog/shop-catalog';
@@ -15,6 +16,8 @@ export interface SelectedGarment {
   readonly variant_id: string;
   readonly category?: string;
   readonly is_test_fixture?: boolean;
+  readonly color_name?: string;
+  readonly size_label?: SizeLabel;
 }
 
 export async function readSelectedGarment(sessionId: string): Promise<SelectedGarment | null> {
@@ -49,6 +52,8 @@ export async function readSelectedGarment(sessionId: string): Promise<SelectedGa
     variant_id: parsed.data.variant_id,
     category: garment.data.category,
     is_test_fixture: isTestFixtureCatalogName(garment.data.name),
+    ...(parsed.data.color_name ? { color_name: parsed.data.color_name } : {}),
+    ...(parsed.data.size_label ? { size_label: parsed.data.size_label } : {}),
   };
 }
 
@@ -79,7 +84,7 @@ export async function resolveShopGarment(
   const supabase = createSupabaseAdminClient();
   const variant = await supabase
     .from('garment_variants')
-    .select('id, garment_id, organization_id, shop_id, is_active')
+    .select('id, garment_id, organization_id, shop_id, is_active, color_name')
     .eq('id', selection.variant_id)
     .eq('garment_id', selection.garment_id)
     .eq('organization_id', session.organizationId)
@@ -105,6 +110,8 @@ export async function resolveShopGarment(
     variant_id: selection.variant_id,
     category: garment.data.category,
     is_test_fixture: isTestFixtureCatalogName(garment.data.name),
+    color_name: variant.data.color_name,
+    ...(selection.size_label ? { size_label: selection.size_label } : {}),
   };
 }
 

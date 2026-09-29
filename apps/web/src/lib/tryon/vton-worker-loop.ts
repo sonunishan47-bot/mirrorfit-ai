@@ -8,7 +8,8 @@ import {
 
 /**
  * Process loop for the GPU machine. The mirror does not import this.
- * One claim, one still inference, one completion. No pixels are invented here.
+ * One claim, one still inference (retried once on VTON_UPSTREAM), one completion.
+ * No pixels are invented here.
  */
 
 export interface WorkerLoopOptions {
@@ -56,17 +57,7 @@ export async function runVtonWorker(options: WorkerLoopOptions = {}): Promise<vo
         await sleep(2_000);
         continue;
       }
-      const result = await generateStill(
-        {
-          jobId: claimed.job_id,
-          personUrl: claimed.input_url,
-          garmentUrl: claimed.garment_reference_url,
-          garmentCategory: claimed.garment_category,
-          fitCategory: claimed.fit_category,
-        },
-        env,
-        fetchFn,
-      );
+      const result = await generateWithRetry(claimed, env, fetchFn, sleep);
       if (!result.ok) {
         await complete(origin, secret, fetchFn, claimed.job_id, 'FAILED', result.error, null);
         continue;
@@ -99,6 +90,25 @@ async function claim(
     garment_category: job.garment_category ?? null,
     fit_category: asFit(job.fit_category),
   };
+}
+
+async function generateWithRetry(
+  claimed: ClaimedJob,
+  env: VtonEnv,
+  fetchFn: typeof fetch,
+  sleep: (ms: number) => Promise<void>,
+): Promise<Awaited<ReturnType<typeof generateStill>>> {
+  const job = {
+    jobId: claimed.job_id,
+    personUrl: claimed.input_url,
+    garmentUrl: claimed.garment_reference_url,
+    garmentCategory: claimed.garment_category,
+    fitCategory: claimed.fit_category,
+  };
+  const first = await generateStill(job, env, fetchFn);
+  if (first.ok || first.error !== 'VTON_UPSTREAM') return first;
+  await sleep(400);
+  return generateStill(job, env, fetchFn);
 }
 
 function asFit(value: unknown): VtonFitCategory | null {

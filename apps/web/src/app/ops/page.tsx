@@ -23,9 +23,11 @@ export default async function OpsPage() {
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
           <p className="text-xs uppercase tracking-[0.35em] text-accent">MirrorFit AI</p>
-          <h1 className="text-3xl font-light tracking-tight text-primary">Operations</h1>
+          <h1 className="text-3xl font-light tracking-tight text-primary">
+            {snapshot.brand.title}
+          </h1>
           <p className="text-sm text-secondary">
-            {staff.email} — shop-scoped analytics and kiosk health
+            {snapshot.brand.subtitle} · {staff.email} — shop-scoped analytics and kiosk health
             {snapshot.shop_id ? '' : ' (select a shop-scoped staff user for full metrics)'}
           </p>
         </div>
@@ -61,7 +63,10 @@ export default async function OpsPage() {
         </dl>
         <ul className="divide-y divide-white/5">
           {snapshot.kiosks.map((kiosk) => (
-            <li key={kiosk.display_id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+            <li
+              key={kiosk.display_id}
+              className="flex flex-wrap items-center justify-between gap-2 py-3"
+            >
               <div>
                 <p className="text-primary">{kiosk.name}</p>
                 <p className="text-xs text-muted">
@@ -117,11 +122,23 @@ export default async function OpsPage() {
                 <li className="text-sm text-muted">No garment selections yet.</li>
               ) : null}
             </ul>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <CountList title="Colors" rows={snapshot.analytics.retail.colors} />
+              <CountList title="Sizes" rows={snapshot.analytics.retail.sizes} />
+              <CountList title="Most tried" rows={snapshot.analytics.retail.mostTried} />
+            </div>
+            <p className="text-xs text-muted">
+              Selection rate{' '}
+              {snapshot.analytics.retail.selectionRate === null
+                ? '—'
+                : `${Math.round(snapshot.analytics.retail.selectionRate * 100)}% of sessions`}
+              . This is try-on engagement, not a checkout.
+            </p>
           </>
         ) : (
           <p className="text-sm text-muted">
-            Analytics require a shop-scoped staff account (or a shop filter) so
-            counts stay tenant-isolated.
+            Analytics require a shop-scoped staff account (or a shop filter) so counts stay
+            tenant-isolated.
           </p>
         )}
       </section>
@@ -168,10 +185,71 @@ export default async function OpsPage() {
         )}
       </section>
 
+      <section className="glass space-y-4 rounded-lg p-6">
+        <h2 className="text-sm font-medium uppercase tracking-widest text-muted">
+          Plan and GPU quota
+        </h2>
+        <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div>
+            <dt className="text-xs uppercase tracking-widest text-muted">Plan</dt>
+            <dd className="text-2xl font-light capitalize text-primary">{snapshot.plan}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-widest text-muted">Mirrors</dt>
+            <dd className="text-2xl font-light text-primary">
+              {snapshot.usage.mirrors_online}/{snapshot.limits.mirrors}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-widest text-muted">Stills today</dt>
+            <dd className="text-2xl font-light text-primary">
+              {snapshot.usage.still_jobs_today ?? '—'}/{snapshot.limits.stillJobsPerDay}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-widest text-muted">GPU estimate</dt>
+            <dd className="text-2xl font-light text-primary">
+              {snapshot.usage.gpu_estimate_seconds ?? '—'}s
+            </dd>
+          </div>
+        </dl>
+        <p className="text-xs text-muted">
+          {snapshot.limits.gpuSeconds === 0
+            ? 'This plan does not include photorealistic GPU time. The 2D mirror keeps working.'
+            : snapshot.usage.stills_allowed === false
+              ? `Still jobs are over the ${snapshot.limits.stillJobsPerDay}/day gate. Included GPU time is ${snapshot.limits.gpuSeconds}s. The estimate is 8 seconds per succeeded still, not a measured invoice.`
+              : `Included GPU time ${snapshot.limits.gpuSeconds}s. The estimate is 8 seconds per succeeded still, not a measured invoice.`}{' '}
+          Enterprise JSON is at /api/ops/enterprise for a signed-in manager.
+        </p>
+      </section>
+
       <p className="text-xs text-muted">
-        Generated {snapshot.generated_at}. Aggregates only — no camera frames or private
-        asset paths.
+        Generated {snapshot.generated_at}. Aggregates only — no camera frames or private asset
+        paths.
       </p>
     </main>
+  );
+}
+
+function CountList({
+  title,
+  rows,
+}: {
+  readonly title: string;
+  readonly rows: readonly { readonly label: string; readonly count: number }[];
+}) {
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-widest text-muted">{title}</p>
+      <ul className="mt-2 space-y-1">
+        {rows.slice(0, 5).map((row) => (
+          <li key={row.label} className="flex justify-between text-sm">
+            <span className="truncate text-secondary">{row.label}</span>
+            <span className="text-primary">{row.count}</span>
+          </li>
+        ))}
+        {rows.length === 0 ? <li className="text-sm text-muted">—</li> : null}
+      </ul>
+    </div>
   );
 }

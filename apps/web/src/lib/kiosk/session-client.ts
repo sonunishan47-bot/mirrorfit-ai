@@ -17,6 +17,8 @@ export interface SelectedKioskGarment {
   readonly variantId: string;
   readonly category?: string | null;
   readonly isTestFixture?: boolean;
+  readonly colorName?: string | null;
+  readonly sizeLabel?: string | null;
 }
 
 export interface LiveKioskSession {
@@ -142,10 +144,7 @@ export async function readLiveSession(
   }
 
   if (!response.ok) {
-    throw new LiveSessionPollError(
-      'TRANSIENT',
-      `POLL_TRANSIENT_${response.status || 'UNKNOWN'}`,
-    );
+    throw new LiveSessionPollError('TRANSIENT', `POLL_TRANSIENT_${response.status || 'UNKNOWN'}`);
   }
 
   const body = (await readJson(response)) as Record<string, unknown> | null;
@@ -180,6 +179,8 @@ function readSelectedGarment(value: unknown): SelectedKioskGarment | null {
     variantId: row['variant_id'],
     category: typeof row['category'] === 'string' ? row['category'] : null,
     isTestFixture: row['is_test_fixture'] === true,
+    ...(typeof row['color_name'] === 'string' ? { colorName: row['color_name'] } : {}),
+    ...(typeof row['size_label'] === 'string' ? { sizeLabel: row['size_label'] } : {}),
   };
 }
 

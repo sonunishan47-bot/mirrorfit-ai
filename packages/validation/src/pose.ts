@@ -2,6 +2,7 @@ import {
   BODY_REGIONS,
   GARMENT_AUDIENCES,
   POSE_LANDMARKS,
+  SIZE_LABELS,
   TRYON_PROVIDER_AVAILABILITIES,
   TRYON_RUNTIME_STATUSES,
 } from '@mirrorfit/types';
@@ -48,6 +49,8 @@ export const selectedGarmentSchema = z.object({
   variant_id: uuidSchema,
   category: z.string().trim().min(1).max(80).optional(),
   is_test_fixture: z.boolean().optional(),
+  color_name: z.string().trim().min(1).max(80).optional(),
+  size_label: z.enum(SIZE_LABELS).optional(),
 });
 
 export const customerCatalogItemSchema = z.object({
@@ -58,7 +61,10 @@ export const customerCatalogItemSchema = z.object({
   brand: z.string().trim().min(1).max(120).nullable(),
   color_name: z.string().trim().min(1).max(80),
   price_minor: z.number().int().nonnegative().nullable(),
-  currency_code: z.string().regex(/^[A-Z]{3}$/).nullable(),
+  currency_code: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .nullable(),
   audience: garmentAudienceSchema.nullable(),
   sizes: z.array(z.string().trim().min(1).max(8)).max(12),
   is_test_fixture: z.boolean(),
