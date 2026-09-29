@@ -7,12 +7,13 @@ describe('KioskAnalyticsBuffer', () => {
     const buffer = new KioskAnalyticsBuffer();
     buffer.noteTryOnSelection('TOP');
     buffer.noteTryOnSelection('LOWER_BODY');
+    buffer.noteTryOnSelection('FULL_BODY');
     buffer.noteTryOnSelection(null);
     const snap = buffer.snapshot();
-    expect(snap.try_on_selections).toBe(3);
+    expect(snap.try_on_selections).toBe(4);
     expect(snap.category_top).toBe(1);
     expect(snap.category_lower).toBe(1);
-    expect(snap.category_other).toBe(1);
+    expect(snap.category_other).toBe(2);
     expect(JSON.stringify(snap)).not.toMatch(/storage_path|device_secret|organization_id/);
   });
 

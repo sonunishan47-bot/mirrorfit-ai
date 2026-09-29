@@ -9,7 +9,7 @@ import {
   fixtureCatalogThumbnailSrc,
 } from './fixture-catalog-thumbnail';
 
-const PUBLIC_FIXTURES_DIR = join(process.cwd(), 'public', 'fixtures');
+const PUBLIC_FIXTURES_DIR = join(import.meta.dirname, '../../../public/fixtures');
 
 describe('fixture catalog thumbnails', () => {
   it('maps known TEST FIXTURE names to local public SVG paths', () => {

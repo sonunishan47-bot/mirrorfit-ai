@@ -2,15 +2,19 @@ import type { GarmentFitCategory } from '@mirrorfit/types';
 
 /**
  * Commercial top / outerwear names mapped to TOP fitting.
- * Plurals included. Keep LOWER_BODY separate — no cross-family invention.
+ * Plurals included. Keep LOWER_BODY and FULL_BODY separate — no cross-family invention.
  */
 const TOP =
   /^(tops?|shirts?|t-?shirts?|tees?|blouses?|jackets?|hoodies?|sweaters?|coats?|cardigans?|vests?|tunics?|polos?|sweatshirts?|blazers?|windbreakers?)$/i;
 const LOWER =
   /^(pants?|trousers?|jeans?|shorts?|skirts?|leggings?|chinos?|joggers?|sweatpants?|cargos?|culottes?|overalls?)$/i;
+/** Whole garments. Never sent through the 2D shoulder/hip warp. */
+const FULL =
+  /^(churidars?|dress(?:es)?|abayas?|kurtas?|thobes?|sarees?|saris?|gowns?|jumpsuits?|full[-_ ]?body)$/i;
 
 export function resolveFitCategory(category: string | null | undefined): GarmentFitCategory | null {
   const value = category?.trim() ?? '';
+  if (FULL.test(value)) return 'FULL_BODY';
   if (TOP.test(value)) return 'TOP';
   if (LOWER.test(value)) return 'LOWER_BODY';
   return null;
@@ -46,9 +50,7 @@ const DEFAULT_LOWER: LowerOverlayDefaults = {
  * Outerwear sits slightly higher/wider than a tee. Returns null when the
  * category is not a known TOP — callers must not invent lower-body defaults.
  */
-export function topOverlayDefaults(
-  category: string | null | undefined,
-): TopOverlayDefaults | null {
+export function topOverlayDefaults(category: string | null | undefined): TopOverlayDefaults | null {
   if (resolveFitCategory(category) !== 'TOP') return null;
   const value = category?.trim().toLowerCase() ?? '';
 

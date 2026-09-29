@@ -132,3 +132,7 @@ export function clientIpFromRequest(request: Request): string {
 export const claimRateLimiter = createRateLimiter({ limit: 30, windowMs: 60_000 });
 export const enrollRateLimiter = createRateLimiter({ limit: 10, windowMs: 60_000 });
 export const createSessionRateLimiter = createRateLimiter({ limit: 30, windowMs: 60_000 });
+/** One still per garment change. Not a video stream. */
+export const tryonJobRateLimiter = createRateLimiter({ limit: 12, windowMs: 60_000 });
+/** Worker claim/complete poll. A 2s loop stays under this. */
+export const workerJobRateLimiter = createRateLimiter({ limit: 120, windowMs: 60_000 });

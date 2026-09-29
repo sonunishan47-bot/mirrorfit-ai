@@ -4,17 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import {
-  AsyncTryOnQueue,
   CameraFramePipeline,
   FrameRateCounter,
   LandmarkFittingEngine,
   OverlayBitmapCache,
   OverlayLoadGuard,
   OverlayRenderer,
-  PHOTOREALISTIC_UNAVAILABLE_REASON,
   TEST_FIXTURE_OVERLAY_LAYOUT,
   TEST_FIXTURE_PANTS_LAYOUT,
-  UnavailablePhotorealisticTryOnProvider,
   UnavailableSegmentationProvider,
   computeOverlayOpacity,
   createTestFixturePantsBitmap,
@@ -43,13 +40,15 @@ import { loadDeviceCredential } from '@/lib/device/store';
 import { fetchGarmentOverlay } from '@/lib/tryon/garment-overlay-client';
 import { createKioskPoseProvider } from '@/lib/tryon/mediapipe-pose-provider';
 
+import { PhotorealUpgrade } from './photoreal-upgrade';
+
 /**
  * Try-on runtime. Runs only while the session is ACTIVE.
  *
  * Pose uses official MediaPipe Pose Landmarker when it initializes.
- * Segmentation is still unavailable. Photorealistic / diffusion try-on is
- * honestly unavailable (no frame upload, no on-device model) — the kiosk
- * falls back to pose-geometry / pose-warp overlays.
+ * Segmentation is still unavailable. The geometric overlay is the live path.
+ * An optional consented still is handled by PhotorealUpgrade and does not
+ * enter processFrame.
  *
  * Pose initialize/dispose is tied to `active` only. Garment changes do not
  * reload the model. Overlay loads use a generation guard so rapid phone
@@ -58,6 +57,7 @@ import { createKioskPoseProvider } from '@/lib/tryon/mediapipe-pose-provider';
 export function TryOnPanel({
   active,
   getFrame,
+  getSessionId,
   selectedGarment,
   selectedCategory,
   selectedIsTestFixture = false,
@@ -67,6 +67,7 @@ export function TryOnPanel({
 }: {
   active: boolean;
   getFrame: () => CameraFrame | null;
+  getSessionId: () => string | null;
   selectedGarment: { garmentId: string; variantId: string } | null;
   selectedCategory?: string | null;
   selectedIsTestFixture?: boolean;
@@ -85,6 +86,8 @@ export function TryOnPanel({
   const [dropped, setDropped] = useState(0);
   const [poseHint, setPoseHint] = useState<string | null>(null);
   const [hasOverlayAsset, setHasOverlayAsset] = useState(false);
+  const [personPresent, setPersonPresent] = useState(false);
+  const [bodyConfidence, setBodyConfidence] = useState<number | null>(null);
   const view = presentTryOn(status);
 
   useEffect(() => {
@@ -105,8 +108,6 @@ export function TryOnPanel({
     const segmentation = new UnavailableSegmentationProvider();
     const fitting = new LandmarkFittingEngine();
     const renderer = new OverlayRenderer();
-    const photorealistic = new UnavailablePhotorealisticTryOnProvider();
-    const tryOnQueue = new AsyncTryOnQueue(2_500);
     const poseFpsCounter = new FrameRateCounter();
     const shirtFixture = createTestFixtureShirtBitmap();
     const pantsFixture = createTestFixturePantsBitmap();
@@ -177,7 +178,6 @@ export function TryOnPanel({
 
     function clearOverlay(): void {
       loadGuard.begin();
-      tryOnQueue.cancel();
       fitting.setAnchorMode('center');
       fitting.setWidthFactor(null);
       renderer.setOverlay(null);
@@ -216,7 +216,7 @@ export function TryOnPanel({
         });
         if (!loadGuard.isCurrent(token) || disposed) {
           if (loaded && 'close' in loaded.bitmap) {
-            (loaded.bitmap as ImageBitmap).close?.();
+            loaded.bitmap.close?.();
           }
           return false;
         }
@@ -245,45 +245,6 @@ export function TryOnPanel({
       setHasOverlayAsset(true);
       noteReason(null);
       return true;
-    }
-
-    /**
-     * Probe the photorealistic provider asynchronously. Always null today —
-     * never replaces the geometric overlay with a decorative stand-in.
-     * Timeout / cancel leaves the pose-geometry path unchanged.
-     */
-    function probePhotorealisticFallback(): void {
-      const current = garmentRef.current;
-      if (!current.selectedGarment) return;
-      void tryOnQueue.enqueue(async (signal) => {
-        if (signal.cancelled || disposed) return null;
-        const result = await photorealistic.generate({
-          frame: {
-            timestampMs: Date.now(),
-            width: 1,
-            height: 1,
-            source: shirtFixture,
-          },
-          fit: {
-            timestampMs: Date.now(),
-            confidence: 0,
-            transform: {
-              translate: { x: 0.5, y: 0.5 },
-              scaleX: 0,
-              scaleY: 0,
-              rotation: 0,
-            },
-          },
-          garmentId: current.selectedGarment!.garmentId,
-          variantId: current.selectedGarment!.variantId,
-        });
-        if (signal.cancelled || disposed) return null;
-        if (result === null && photorealistic.availability === 'unavailable') {
-          // Geometric overlay already active — keep it.
-          return null;
-        }
-        return result;
-      });
     }
 
     async function syncGarment(): Promise<void> {
@@ -327,7 +288,6 @@ export function TryOnPanel({
         if (disposed) return;
       }
 
-      probePhotorealisticFallback();
       move('GARMENT_CHOSEN');
     }
 
@@ -337,7 +297,6 @@ export function TryOnPanel({
         pose = await createKioskPoseProvider();
         await segmentation.initialize();
         await fitting.initialize();
-        await photorealistic.initialize();
         if (canvas) {
           await renderer.initialize({ width: canvas.width || 1, height: canvas.height || 1 });
         }
@@ -378,21 +337,27 @@ export function TryOnPanel({
                   );
                   const hint = formatPoseReadiness(describePoseReadiness(landmarks));
                   setPoseHint((current) => (current === hint ? current : hint));
+                  setPersonPresent((current) => (current ? current : true));
+                  setBodyConfidence((current) => {
+                    const next = landmarks.confidence;
+                    if (current !== null && Math.abs(current - next) < 0.05) return current;
+                    return next;
+                  });
                   move('PERSON_SEEN');
                   presenceRef.current?.(true);
                 } else {
                   // Person lost — drop any held overlay so we do not freeze a ghost shirt.
                   fitting.clearHeldFit();
                   setPoseHint((current) => (current === null ? current : null));
+                  setPersonPresent((current) => (current ? false : current));
+                  setBodyConfidence((current) => (current === null ? current : null));
                   move('PERSON_LOST');
                   presenceRef.current?.(false);
                 }
 
                 const geometry = landmarks ? deriveBodyGeometry(landmarks) : null;
                 const lowerGeometry =
-                  landmarks && family === 'LOWER_BODY'
-                    ? deriveLowerBodyGeometry(landmarks)
-                    : null;
+                  landmarks && family === 'LOWER_BODY' ? deriveLowerBodyGeometry(landmarks) : null;
                 const geometryReady =
                   family === 'LOWER_BODY' ? lowerGeometry !== null : geometry !== null;
 
@@ -497,13 +462,11 @@ export function TryOnPanel({
     return () => {
       disposed = true;
       loadGuard.invalidate();
-      tryOnQueue.cancel();
       overlayCache.clear();
       void pipeline?.dispose();
       void pose?.dispose();
       void segmentation.dispose();
       void fitting.dispose();
-      void photorealistic.dispose();
       void renderer.dispose();
     };
   }, [active]);
@@ -553,18 +516,29 @@ export function TryOnPanel({
         {layer}. {view.honesty}
         {reason ? ` ${reason}` : ''}
         {selectedGarment
-          ? overlayKind === 'test_fixture'
-            ? ` TEST FIXTURE ${family === 'LOWER_BODY' ? 'pants' : 'shirt'} overlay only — NOT A COMMERCIAL PRODUCT — NOT A PHOTOGRAPHIC AI TRY-ON.`
-            : overlayKind === 'catalog_overlay'
-              ? ' Commercial overlay from shop catalog — pose-geometry / pose-warp placement, not photorealistic try-on.'
-              : ' No drawable garment overlay asset is available.'
+          ? family === 'FULL_BODY'
+            ? ' Full-body garments are not warped in 2D. Nothing is invented if realistic try-on is unavailable.'
+            : overlayKind === 'test_fixture'
+              ? ` TEST FIXTURE ${family === 'LOWER_BODY' ? 'pants' : 'shirt'} overlay only — NOT A COMMERCIAL PRODUCT — NOT A PHOTOGRAPHIC AI TRY-ON.`
+              : overlayKind === 'catalog_overlay'
+                ? ' Commercial overlay from shop catalog — pose-geometry / pose-warp placement, not photorealistic try-on.'
+                : ' No drawable garment overlay asset is available.'
           : ' No garment is selected.'}
-        {` ${PHOTOREALISTIC_UNAVAILABLE_REASON}`}
         {poseHint ? ` ${poseHint}` : ''}
         {poseFps !== null ? ` Pose ${poseFps.toFixed(0)} fps.` : ''}
         {dropped > 0 ? ` Dropped ${dropped} busy frames.` : ''}
         {' Segmentation unavailable.'}
       </p>
+      <PhotorealUpgrade
+        active={active}
+        overlayRoot={overlayRoot}
+        getFrame={() => getFrameRef.current()}
+        getSessionId={getSessionId}
+        selectedGarment={selectedGarment}
+        selectedCategory={selectedCategory ?? null}
+        personPresent={personPresent}
+        bodyConfidence={bodyConfidence}
+      />
     </>
   );
 }

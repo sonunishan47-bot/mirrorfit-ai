@@ -28,7 +28,7 @@ export class KioskAnalyticsBuffer {
 
   static readonly MAX_COUNTER = 1_000_000;
 
-  noteTryOnSelection(fitFamily: 'TOP' | 'LOWER_BODY' | null): void {
+  noteTryOnSelection(fitFamily: 'TOP' | 'LOWER_BODY' | 'FULL_BODY' | null): void {
     this.#tryOnSelections = bump(this.#tryOnSelections);
     if (fitFamily === 'TOP') this.#categoryTop = bump(this.#categoryTop);
     else if (fitFamily === 'LOWER_BODY') this.#categoryLower = bump(this.#categoryLower);

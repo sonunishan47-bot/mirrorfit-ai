@@ -12,7 +12,8 @@
     "typecheck": "next typegen && tsc -p tsconfig.json",
     "provision-tenant": "node --env-file=.env.local scripts/provision-tenant.mjs",
     "seed-test-fixture-garment": "node --env-file=.env.local scripts/seed-test-fixture-garment.mjs",
-    "e2e": "node --env-file=.env.local scripts/e2e-phase3.mjs"
+    "e2e": "node --env-file=.env.local scripts/e2e-phase3.mjs",
+    "tryon-worker": "node scripts/tryon-worker.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "0.10.32",

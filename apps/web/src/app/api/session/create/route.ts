@@ -12,6 +12,7 @@ import { generatePairingToken, sha256Hex } from '@/lib/crypto/secrets';
 import { authenticateDevice } from '@/lib/device/authenticate';
 import { buildPairingUrl, DEFAULT_PAIRING_TTL_SECONDS } from '@/lib/session/pairing';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin-client';
+import { sweepTryOnAssets } from '@/lib/tryon/tryon-job-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,6 +79,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!session.success) {
     return clientError('INTERNAL');
   }
+
+  await sweepTryOnAssets();
 
   return NextResponse.json(
     {

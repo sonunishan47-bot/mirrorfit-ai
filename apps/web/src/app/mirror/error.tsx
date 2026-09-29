@@ -25,8 +25,8 @@ export default function MirrorError({
         <p className="text-xs uppercase tracking-[0.35em] text-accent">MirrorFit AI</p>
         <h1 className="text-3xl font-light tracking-wide">Temporary display fault</h1>
         <p className="max-w-md text-sm text-secondary">
-          Something failed while drawing this screen. Your device enrollment is unchanged.
-          Frames stay on this device.
+          Something failed while drawing this screen. Your device enrollment is unchanged. The live
+          camera stays on this device.
         </p>
         <button
           type="button"

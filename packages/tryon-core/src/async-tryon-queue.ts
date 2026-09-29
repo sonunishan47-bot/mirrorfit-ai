@@ -3,11 +3,18 @@
  *
  * Drops superseded requests so a slow AI callback cannot overwrite a newer
  * garment selection. Timeouts resolve to null so the kiosk keeps the geometric
- * overlay without freezing. Timers are cleared on cancel to avoid long-session
- * timer accumulation.
+ * overlay without freezing. The AbortSignal is aborted on timeout and cancel;
+ * callers that upload a still must pass it to fetch.
  */
 
-export type AsyncTryOnTask<T> = (signal: { readonly cancelled: boolean }) => Promise<T | null>;
+import { PHOTOREALISTIC_QUEUE_TIMEOUT_MS } from './still-capture';
+
+export type AsyncTryOnSignal = {
+  cancelled: boolean;
+  readonly signal: AbortSignal;
+};
+
+export type AsyncTryOnTask<T> = (signal: AsyncTryOnSignal) => Promise<T | null>;
 
 type PendingSlot = {
   readonly generation: number;
@@ -20,9 +27,10 @@ export class AsyncTryOnQueue {
   #busy = false;
   #pending: PendingSlot | null = null;
   #timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  #activeAbort: AbortController | null = null;
   readonly #timeoutMs: number;
 
-  constructor(timeoutMs = 2_500) {
+  constructor(timeoutMs = PHOTOREALISTIC_QUEUE_TIMEOUT_MS) {
     this.#timeoutMs = Math.max(1, timeoutMs);
   }
 
@@ -40,6 +48,7 @@ export class AsyncTryOnQueue {
    */
   enqueue<T>(task: AsyncTryOnTask<T>): Promise<T | null> {
     const generation = ++this.#generation;
+    this.#abortActive();
     if (this.#pending) {
       this.#pending.resolve(null);
       this.#pending = null;
@@ -47,7 +56,7 @@ export class AsyncTryOnQueue {
     return new Promise<T | null>((resolve) => {
       this.#pending = {
         generation,
-        run: task as AsyncTryOnTask<unknown>,
+        run: task,
         resolve: (value) => resolve(value as T | null),
       };
       void this.#pump();
@@ -58,6 +67,7 @@ export class AsyncTryOnQueue {
   cancel(): void {
     this.#generation += 1;
     this.#clearTimeout();
+    this.#abortActive();
     if (this.#pending) {
       this.#pending.resolve(null);
       this.#pending = null;
@@ -70,15 +80,22 @@ export class AsyncTryOnQueue {
     if (!next) return;
     this.#pending = null;
     this.#busy = true;
-    const token = { cancelled: false };
+    const controller = new AbortController();
+    this.#activeAbort = controller;
+    const token: AsyncTryOnSignal = { cancelled: false, signal: controller.signal };
     const watch = next.generation;
     try {
       const result = await Promise.race([
         next.run(token),
-        this.#timeout(this.#timeoutMs).then(() => null),
+        this.#timeout(this.#timeoutMs).then(() => {
+          token.cancelled = true;
+          controller.abort();
+          return null;
+        }),
       ]);
       if (watch !== this.#generation) {
         token.cancelled = true;
+        controller.abort();
         next.resolve(null);
       } else {
         next.resolve(result);
@@ -87,11 +104,17 @@ export class AsyncTryOnQueue {
       next.resolve(null);
     } finally {
       this.#clearTimeout();
+      if (this.#activeAbort === controller) this.#activeAbort = null;
       this.#busy = false;
       if (this.#pending) {
         void this.#pump();
       }
     }
+  }
+
+  #abortActive(): void {
+    this.#activeAbort?.abort();
+    this.#activeAbort = null;
   }
 
   #timeout(ms: number): Promise<void> {

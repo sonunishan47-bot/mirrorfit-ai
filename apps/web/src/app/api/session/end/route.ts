@@ -5,6 +5,7 @@ import { endedSessionSchema, parseJsonBody, sessionEndRequestSchema } from '@mir
 import { clientError } from '@/lib/api/errors';
 import { authenticateDevice } from '@/lib/device/authenticate';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin-client';
+import { purgeTryOnAssetsForSession, sweepTryOnAssets } from '@/lib/tryon/tryon-job-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +54,13 @@ export async function POST(request: Request): Promise<NextResponse> {
   const ended = endedSessionSchema.safeParse(data);
   if (!ended.success) {
     return clientError('INTERNAL');
+  }
+
+  try {
+    await purgeTryOnAssetsForSession(ended.data.session_id);
+    await sweepTryOnAssets();
+  } catch {
+    // The session is already ended. Storage cleanup retries on the next sweep.
   }
 
   return NextResponse.json(

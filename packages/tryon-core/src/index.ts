@@ -25,3 +25,4 @@ export * from './lower-body-geometry';
 export * from './unavailable-photorealistic';
 export * from './async-tryon-queue';
 export * from './pose-thresholds';
+export * from './still-capture';

@@ -9,6 +9,11 @@
 export const GARMENT_AUDIENCES = ['WOMENS', 'MENS', 'UNISEX'] as const;
 export type GarmentAudience = (typeof GARMENT_AUDIENCES)[number];
 
-/** Fitting families the Phase 5 engine understands. */
-export const GARMENT_FIT_CATEGORIES = ['TOP', 'LOWER_BODY'] as const;
+/**
+ * Fitting families.
+ *
+ * TOP and LOWER_BODY are the live 2D overlay families.
+ * FULL_BODY is photorealistic-only: the 2D engine must not warp it.
+ */
+export const GARMENT_FIT_CATEGORIES = ['TOP', 'LOWER_BODY', 'FULL_BODY'] as const;
 export type GarmentFitCategory = (typeof GARMENT_FIT_CATEGORIES)[number];

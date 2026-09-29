@@ -3,8 +3,8 @@
  *
  * Staff pages are the ones that need a cookie. Everything else is either
  * public by nature (health) or authenticates with something that is not a
- * Supabase Auth user: a device bearer secret, a pairing token, or — for
- * `/mirror` — a kiosk that has not signed in and never will.
+ * Supabase Auth user: a device bearer secret, a pairing token, a worker
+ * secret, or — for `/mirror` — a kiosk that has not signed in and never will.
  */
 export const PUBLIC_PATHS = [
   '/',
@@ -12,6 +12,7 @@ export const PUBLIC_PATHS = [
   '/api/health',
   '/api/device',
   '/api/session',
+  '/api/worker',
   '/s',
   '/mirror',
   '/dev-ca',

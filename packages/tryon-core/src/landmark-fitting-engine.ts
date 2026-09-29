@@ -135,9 +135,7 @@ export class LandmarkFittingEngine implements GarmentFittingEngine {
   /** Optional hip blend into draw width (TOP); null uses DEFAULT_HIP_WIDTH_BLEND. */
   setHipWidthBlend(blend: number | null): void {
     this.#hipWidthBlend =
-      typeof blend === 'number' && Number.isFinite(blend)
-        ? Math.min(1, Math.max(0, blend))
-        : null;
+      typeof blend === 'number' && Number.isFinite(blend) ? Math.min(1, Math.max(0, blend)) : null;
     this.#resetHold();
   }
 
@@ -227,7 +225,9 @@ export function fitFromPose(
 ): { fit: FittingResult | null; status: FitStatus } {
   if (!garment) return { fit: null, status: 'not_ready' };
   const family = resolveFitCategory(garment.category);
-  if (family === null) return { fit: null, status: 'not_ready' };
+  if (family !== 'TOP' && family !== 'LOWER_BODY') {
+    return { fit: null, status: 'not_ready' };
+  }
   // Use joints required for this family — not the mean of every mapped
   // landmark. Low-visibility ankles/wrists were diluting pose.confidence
   // below MIN_POSE_CONFIDENCE even when shoulders+hips were ready.
@@ -283,8 +283,7 @@ function fitTopFromPose(
       ? Math.min(1, Math.max(0, options.hipWidthBlend))
       : DEFAULT_HIP_WIDTH_BLEND;
 
-  const blendedWidth =
-    geometry.shoulderWidth * (1 - hipBlend) + geometry.hipWidth * hipBlend;
+  const blendedWidth = geometry.shoulderWidth * (1 - hipBlend) + geometry.hipWidth * hipBlend;
   const yawScale = yawScaleCompression(geometry.yaw);
 
   const raw: FittingResult = {
@@ -353,10 +352,7 @@ function fitLowerBodyFromPose(
  * Minimum confidence among joints required for the active fit family.
  * Missing joints yield 0 — callers treat that as not ready.
  */
-export function fittingJointConfidence(
-  pose: PoseFrame,
-  family: GarmentFitCategory,
-): number {
+export function fittingJointConfidence(pose: PoseFrame, family: GarmentFitCategory): number {
   if (family === 'TOP') {
     const joints = [
       keypointByName(pose, 'LEFT_SHOULDER'),

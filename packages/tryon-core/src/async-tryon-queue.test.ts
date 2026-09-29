@@ -71,4 +71,18 @@ describe('AsyncTryOnQueue', () => {
     queue.cancel();
     expect(await pending).toBeNull();
   });
+
+  it('aborts the signal when the timeout fires so an upload can stop', async () => {
+    const queue = new AsyncTryOnQueue(25);
+    let aborted = false;
+    const result = await queue.enqueue(async (token) => {
+      token.signal.addEventListener('abort', () => {
+        aborted = true;
+      });
+      await new Promise((r) => setTimeout(r, 80));
+      return 'late';
+    });
+    expect(result).toBeNull();
+    expect(aborted).toBe(true);
+  });
 });

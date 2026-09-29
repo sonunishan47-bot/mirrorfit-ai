@@ -5,10 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FrameRateCounter, resolveFitCategory } from '@mirrorfit/tryon-core';
 
 import { ClientErrorBoundary } from '@/components/client-error-boundary';
-import {
-  BrowserCameraProvider,
-  describeCameraStartError,
-} from '@/lib/camera/browser-camera';
+import { BrowserCameraProvider, describeCameraStartError } from '@/lib/camera/browser-camera';
 import { resolveCameraPresence } from '@/lib/camera/camera-presence';
 import { startHeartbeatLoop } from '@/lib/device/heartbeat-loop';
 import {
@@ -580,7 +577,11 @@ export function KioskShell() {
 
               <p className="max-w-md text-sm text-muted">{view.honesty}</p>
               {pollHealth === 'degraded' ? (
-                <p className="max-w-md text-sm text-accent" role="status" data-testid="poll-degraded">
+                <p
+                  className="max-w-md text-sm text-accent"
+                  role="status"
+                  data-testid="poll-degraded"
+                >
                   Sync recovering after a network drop. Session epoch is preserved — retrying…
                 </p>
               ) : null}
@@ -597,6 +598,7 @@ export function KioskShell() {
                     active={tryOnActive}
                     overlayRoot={overlayRoot}
                     getFrame={() => cameraRef.current?.readFrame() ?? null}
+                    getSessionId={() => lifecycleRef.current.getSessionId()}
                     selectedGarment={selectedGarment}
                     selectedCategory={selectedGarment?.category ?? null}
                     selectedIsTestFixture={selectedGarment?.isTestFixture === true}
@@ -630,7 +632,7 @@ export function KioskShell() {
             {cameraPresence === 'live'
               ? showScreensaver
                 ? 'Camera idle · pose processing paused to save power.'
-                : 'Camera on this device. Frames stay here.'
+                : 'Camera on this device. One still is uploaded only if you allow realistic try-on.'
               : cameraPresence === 'starting'
                 ? 'Starting camera…'
                 : cameraError

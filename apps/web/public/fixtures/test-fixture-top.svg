@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="480" viewBox="0 0 360 480" role="img" aria-label="TEST FIXTURE TOP sample shirt">
+  <rect width="360" height="480" fill="#ebe6dc"/>
+  <path d="M110 120 L150 100 L180 130 L210 100 L250 120 L270 190 L240 180 L240 340 L120 340 L120 180 L90 190 Z" fill="#1e4d8c" stroke="#12263f" stroke-width="3"/>
+  <text x="180" y="400" text-anchor="middle" font-family="system-ui,sans-serif" font-size="18" font-weight="600" fill="#1b3022" letter-spacing="0.12em">TEST FIXTURE</text>
+  <text x="180" y="428" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" fill="#5c6b60">TOP - not a product</text>
+</svg>

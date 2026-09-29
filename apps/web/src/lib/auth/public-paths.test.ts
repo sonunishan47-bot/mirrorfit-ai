@@ -30,4 +30,9 @@ describe('kiosk and device paths stay off the login redirect', () => {
     expect(isPublicPath('/api/device/enroll')).toBe(true);
     expect(isPublicPath('/api/session/create')).toBe(true);
   });
+
+  it('keeps the worker API off the staff login redirect', () => {
+    expect(isPublicPath('/api/worker/tryon-jobs/claim')).toBe(true);
+    expect(isPublicPath('/api/worker/tryon-jobs/complete')).toBe(true);
+  });
 });

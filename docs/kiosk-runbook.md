@@ -1,15 +1,21 @@
 # Kiosk operator runbook
 
-Day-to-day guide for the in-store mirror. Only describes behaviour that exists
-in the product today (pose landmarks + PNG overlay — **not** photorealistic
-try-on).
+Day-to-day guide for the in-store mirror. The live path is pose landmarks plus
+a 2D garment overlay. An optional realistic try-on can upload **one** still
+after the customer allows it on the mirror. That model is **not connected**
+until a worker and a private inference URL are configured. The product does
+not invent a photographic result.
 
 ## Privacy reminder
 
-- Camera frames stay on the mirror. Do not ask customers to upload photos.
+- The live camera stays on the mirror. Frames are not streamed.
+- A realistic try-on, only after the on-mirror “Allow one still” control,
+  uploads one JPEG. It is stored privately and deleted when the session ends
+  or the input expires (about 20 minutes).
 - Do not discuss or guess ethnicity, health, or other sensitive attributes.
 - Pairing QR codes encode only a short-lived session link (`/s?t=…`), never a
   device secret.
+- The phone catalog does not receive body images or private storage paths.
 - Recommendations on the phone are suggestions, not objective truth.
 
 ---
@@ -118,6 +124,7 @@ Staff can use `/ops` (authenticated) for fleet health including explicit
 
 ## 13. Basic privacy reminder (floor script)
 
-> The mirror uses the camera only on this device to align a product overlay.
-> Nothing is uploaded for try-on. Scan the QR on your own phone to browse;
-> you can end anytime.
+> The mirror uses the camera on this screen to line up a product overlay.
+> If you allow a realistic try-on, one still photo is uploaded and then
+> deleted when the session ends. Nothing is streamed. Scan the QR on your
+> own phone to browse; you can end anytime. The overlay is not a measurement.

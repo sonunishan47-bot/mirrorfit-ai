@@ -5,6 +5,7 @@ import { deviceHeartbeatRequestSchema, parseJsonBody } from '@mirrorfit/validati
 import { clientError } from '@/lib/api/errors';
 import { authenticateDevice } from '@/lib/device/authenticate';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin-client';
+import { sweepTryOnAssets } from '@/lib/tryon/tryon-job-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +55,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (error) {
     return clientError('INTERNAL');
   }
+
+  await sweepTryOnAssets();
 
   return NextResponse.json({ status: 'ok' }, { headers: { 'Cache-Control': 'no-store' } });
 }

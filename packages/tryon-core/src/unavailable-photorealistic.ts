@@ -1,13 +1,12 @@
 /**
  * STATUS: PROVIDER UNAVAILABLE — NOT PRODUCTION READY.
  *
- * Photorealistic / diffusion try-on is not integrated. Reasons:
- * 1. No verified on-device appearance-preserving model ships in this repo.
- * 2. Cloud diffusion would require uploading camera frames, which violates
- *    the privacy invariant unless an explicit consent path exists (it does not).
+ * This in-process provider does not run a photorealistic model and does not
+ * upload frames. A consented still, when the customer allows it, goes through
+ * the server try-on job and the pod worker — not through this class.
  *
- * Callers must fall back to local pose-geometry / pose-warp overlays.
- * This module never invents a fake "AI ready" image.
+ * Callers must keep the local pose-geometry overlay when generate() returns
+ * null. This module never invents a fake "AI ready" image.
  */
 
 import type { CameraFrame, Disposable } from './providers';
