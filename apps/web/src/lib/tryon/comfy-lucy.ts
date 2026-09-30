@@ -222,7 +222,10 @@ export async function runLocalLucyEdit(
   return bytes;
 }
 
-function stampUploadedVideo(workflow: Record<string, unknown>, name: string): Record<string, unknown> {
+function stampUploadedVideo(
+  workflow: Record<string, unknown>,
+  name: string,
+): Record<string, unknown> {
   const copy = JSON.parse(JSON.stringify(workflow)) as Record<string, unknown>;
   const node = copy['82'];
   if (node && typeof node === 'object') {
