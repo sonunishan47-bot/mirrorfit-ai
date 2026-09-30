@@ -1,3 +1,4 @@
+import type { FullBodyKind } from './fit-category';
 import type { FittingResult } from './geometry';
 import { overlayPointFromLandmark } from './overlay-coordinates';
 import { OVERLAY_MIN_DRAW_CONFIDENCE } from './pose-thresholds';
@@ -229,6 +230,73 @@ export function createTestFixturePantsBitmap(): HTMLCanvasElement {
     context.fillText('TEST FIXTURE', 90, 160);
     context.fillText('PANTS — NOT A PRODUCT', 90, 176);
   }
+  return canvas;
+}
+
+/** Tall pose silhouette. Not a product photo and not a diffusion result. */
+export function createFullBodySilhouette(kind: FullBodyKind): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = 200;
+  canvas.height = 520;
+  const context = canvas.getContext('2d');
+  if (!context) return canvas;
+  context.clearRect(0, 0, 200, 520);
+  context.fillStyle =
+    kind === 'abaya'
+      ? 'rgba(28, 32, 38, 0.55)'
+      : kind === 'thobe'
+        ? 'rgba(236, 232, 220, 0.55)'
+        : kind === 'kurta'
+          ? 'rgba(120, 72, 48, 0.5)'
+          : kind === 'churidar'
+            ? 'rgba(92, 36, 48, 0.5)'
+            : 'rgba(46, 74, 92, 0.5)';
+  context.beginPath();
+  if (kind === 'churidar') {
+    context.moveTo(55, 36);
+    context.lineTo(145, 36);
+    context.lineTo(150, 150);
+    context.lineTo(118, 210);
+    context.lineTo(112, 500);
+    context.lineTo(88, 500);
+    context.lineTo(82, 210);
+    context.lineTo(50, 150);
+  } else if (kind === 'kurta') {
+    context.moveTo(48, 36);
+    context.lineTo(152, 36);
+    context.lineTo(168, 110);
+    context.lineTo(140, 120);
+    context.lineTo(136, 340);
+    context.lineTo(64, 340);
+    context.lineTo(60, 120);
+    context.lineTo(32, 110);
+  } else if (kind === 'abaya') {
+    context.moveTo(70, 36);
+    context.lineTo(130, 36);
+    context.lineTo(188, 500);
+    context.lineTo(12, 500);
+  } else if (kind === 'thobe') {
+    context.moveTo(62, 36);
+    context.lineTo(138, 36);
+    context.lineTo(150, 500);
+    context.lineTo(50, 500);
+  } else {
+    context.moveTo(58, 36);
+    context.lineTo(142, 36);
+    context.lineTo(128, 180);
+    context.lineTo(168, 500);
+    context.lineTo(32, 500);
+    context.lineTo(72, 180);
+  }
+  context.closePath();
+  context.fill();
+  context.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+  context.stroke();
+  context.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  context.font = '12px sans-serif';
+  context.textAlign = 'center';
+  context.fillText(kind.toUpperCase(), 100, 240);
+  context.fillText('NOT A PHOTO', 100, 258);
   return canvas;
 }
 

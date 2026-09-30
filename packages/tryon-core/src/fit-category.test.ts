@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveFitCategory, lowerOverlayDefaults, topOverlayDefaults } from './fit-category';
+import {
+  resolveFitCategory,
+  lowerOverlayDefaults,
+  topOverlayDefaults,
+  fullBodyOverlayDefaults,
+} from './fit-category';
 
 describe('resolveFitCategory', () => {
   it('maps shirt family names to TOP', () => {
@@ -78,6 +83,23 @@ describe('lowerOverlayDefaults', () => {
     expect(jeans).not.toBeNull();
     expect(shorts).not.toBeNull();
     expect(shorts!.widthFactor).toBeGreaterThan(jeans!.widthFactor);
+  });
+
+  it('knows dress, abaya, kurta, churidar, and thobe as different full-body silhouettes', () => {
+    const dress = fullBodyOverlayDefaults('Dress');
+    const abaya = fullBodyOverlayDefaults('Abaya');
+    const kurta = fullBodyOverlayDefaults('Kurta');
+    const churidar = fullBodyOverlayDefaults('Churidar');
+    const thobe = fullBodyOverlayDefaults('Thobe');
+    expect(dress?.kind).toBe('dress');
+    expect(abaya?.kind).toBe('abaya');
+    expect(kurta?.kind).toBe('kurta');
+    expect(churidar?.kind).toBe('churidar');
+    expect(thobe?.kind).toBe('thobe');
+    expect(abaya!.hemFactor).toBeGreaterThan(thobe!.hemFactor);
+    expect(kurta!.lengthFactor).toBeLessThan(abaya!.lengthFactor);
+    expect(churidar!.hemFactor).toBeLessThan(dress!.hemFactor);
+    expect(fullBodyOverlayDefaults('Shirt')).toBeNull();
   });
 
   it('maps expanded lower-body names', () => {

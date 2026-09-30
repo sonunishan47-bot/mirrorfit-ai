@@ -5,6 +5,7 @@ import type { PoseFrame } from './geometry';
 import {
   DEFAULT_HIP_WIDTH_BLEND,
   LandmarkFittingEngine,
+  fitFromPose,
   TOP_HEIGHT_FACTOR,
   TOP_VERTICAL_OFFSET,
   TOP_WIDTH_FACTOR,
@@ -85,6 +86,23 @@ describe('landmark fitting', () => {
     expect(fit?.transform.scaleY).toBeCloseTo(0.3 * TOP_HEIGHT_FACTOR);
     expect(fit?.transform.rotation).toBeCloseTo(0);
     await engine.dispose();
+  });
+
+  it('fits an abaya from the same shoulders and hips, without inventing ankles', () => {
+    const result = fitFromPose(TEST_FIXTURE_POSE, deriveBodyGeometry(TEST_FIXTURE_POSE), {
+      garmentId: 'g',
+      variantId: 'v',
+      category: 'Abaya',
+    });
+    expect(result.status).toBe('ready');
+    expect(result.fit).not.toBeNull();
+    expect(
+      fitFromPose(TEST_FIXTURE_POSE, null, {
+        garmentId: 'g',
+        variantId: 'v',
+        category: 'Hat',
+      }).status,
+    ).toBe('not_ready');
   });
 
   it('does not invent TOP fitting when category is missing', async () => {

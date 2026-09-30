@@ -14,12 +14,15 @@ import {
   TEST_FIXTURE_PANTS_LAYOUT,
   UnavailableSegmentationProvider,
   computeOverlayOpacity,
+  createFullBodySilhouette,
   createTestFixturePantsBitmap,
   createTestFixtureShirtBitmap,
   deriveBodyGeometry,
   deriveLowerBodyGeometry,
   describePoseReadiness,
   formatPoseReadiness,
+  fullBodyOverlayDefaults,
+  fullBodyWarpParallelogram,
   loadOverlayBitmap,
   lowerBodyWarpParallelogram,
   lowerOverlayDefaults,
@@ -171,6 +174,10 @@ export function TryOnPanel({
         fitting.setWidthFactor(lowerOverlayDefaults(category)?.widthFactor ?? null);
         return;
       }
+      if (family === 'FULL_BODY') {
+        fitting.setWidthFactor(fullBodyOverlayDefaults(category)?.widthFactor ?? null);
+        return;
+      }
       fitting.setWidthFactor(null);
     }
 
@@ -199,11 +206,25 @@ export function TryOnPanel({
       setHasOverlayAsset(false);
     }
 
+    function applyFullBodySilhouette(category: string | null | undefined): void {
+      const defaults = fullBodyOverlayDefaults(category);
+      loadGuard.begin();
+      fitting.setAnchorMode('shoulders');
+      fitting.setWidthFactor(defaults?.widthFactor ?? null);
+      renderer.setOverlay(createFullBodySilhouette(defaults?.kind ?? 'dress'), {
+        anchor: defaults?.anchor ?? { x: 0.5, y: 36 / 520 },
+        aspectRatio: 200 / 520,
+      });
+      overlayLoaded = false;
+      setHasOverlayAsset(false);
+      noteReason(null);
+    }
+
     async function applyCatalogOverlay(
       garmentId: string,
       variantId: string,
       category: string | null | undefined,
-      family: 'TOP' | 'LOWER_BODY',
+      family: 'TOP' | 'LOWER_BODY' | 'FULL_BODY',
     ): Promise<boolean> {
       const token = loadGuard.begin();
       const secret = loadDeviceCredential()?.deviceSecret ?? null;
@@ -222,7 +243,11 @@ export function TryOnPanel({
       }
 
       const defaults =
-        family === 'TOP' ? topOverlayDefaults(category) : lowerOverlayDefaults(category);
+        family === 'TOP'
+          ? topOverlayDefaults(category)
+          : family === 'LOWER_BODY'
+            ? lowerOverlayDefaults(category)
+            : fullBodyOverlayDefaults(category);
       let entry = overlayCache.get(meta.content_hash);
       if (!entry) {
         const loaded = await loadOverlayBitmap(meta.overlay_url, {
@@ -284,6 +309,21 @@ export function TryOnPanel({
       if (disposed) return;
 
       const fitCategory = resolveFitCategory(current.selectedCategory);
+      if (fitCategory === 'FULL_BODY') {
+        if (!current.selectedIsTestFixture) {
+          const loaded = await applyCatalogOverlay(
+            current.selectedGarment.garmentId,
+            current.selectedGarment.variantId,
+            current.selectedCategory,
+            fitCategory,
+          );
+          if (!loaded && !disposed) applyFullBodySilhouette(current.selectedCategory);
+        } else {
+          applyFullBodySilhouette(current.selectedCategory);
+        }
+        move('GARMENT_CHOSEN');
+        return;
+      }
       if (fitCategory !== 'TOP' && fitCategory !== 'LOWER_BODY') {
         clearOverlay();
         move('GARMENT_CHOSEN');
@@ -402,7 +442,10 @@ export function TryOnPanel({
                   });
                   if (disposed) return;
                   const source = currentOverlaySource();
-                  const drawable = source === 'test_fixture' || source === 'catalog_overlay';
+                  const drawable =
+                    source === 'test_fixture' ||
+                    source === 'catalog_overlay' ||
+                    source === 'full_body_silhouette';
                   if (fit && drawable) {
                     noteReason(null);
                     move('FIT_READY');
@@ -422,6 +465,13 @@ export function TryOnPanel({
                     warp = torsoWarpParallelogram(geometry);
                   } else if (drawable && family === 'LOWER_BODY' && lowerGeometry) {
                     warp = lowerBodyWarpParallelogram(lowerGeometry);
+                  } else if (drawable && family === 'FULL_BODY' && geometry) {
+                    const defaults = fullBodyOverlayDefaults(category);
+                    warp = fullBodyWarpParallelogram(geometry, {
+                      widthFactor: defaults?.widthFactor ?? 1.3,
+                      lengthFactor: defaults?.lengthFactor ?? 1.7,
+                      hemFactor: defaults?.hemFactor ?? 1,
+                    });
                   }
                   const occlusionGeometry =
                     geometry ??
@@ -547,7 +597,9 @@ export function TryOnPanel({
         {reason ? ` ${reason}` : ''}
         {selectedGarment
           ? family === 'FULL_BODY'
-            ? ' Full-body garments are not warped in 2D. Nothing is invented if realistic try-on is unavailable.'
+            ? overlayKind === 'catalog_overlay'
+              ? ' Full-body overlay from the shop catalog, placed from the shoulders to the hem. Not a photorealistic try-on.'
+              : ' Pose silhouette for this full-body garment (dress, abaya, kurta, churidar, or thobe). Not a photograph. A photorealistic still appears only when the GPU worker returns one.'
             : overlayKind === 'test_fixture'
               ? ` TEST FIXTURE ${family === 'LOWER_BODY' ? 'pants' : 'shirt'} overlay only — NOT A COMMERCIAL PRODUCT — NOT A PHOTOGRAPHIC AI TRY-ON.`
               : overlayKind === 'catalog_overlay'

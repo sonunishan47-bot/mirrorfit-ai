@@ -111,7 +111,7 @@ describe('still capture policy', () => {
   });
 });
 
-describe('full-body categories stay off the 2D warp', () => {
+describe('full-body categories are recognised', () => {
   it('maps churidar, dress, abaya, kurta, and thobe to FULL_BODY', () => {
     expect(resolveFitCategory('Churidar')).toBe('FULL_BODY');
     expect(resolveFitCategory('Dress')).toBe('FULL_BODY');
@@ -123,7 +123,7 @@ describe('full-body categories stay off the 2D warp', () => {
     expect(resolveFitCategory('Hats')).toBeNull();
   });
 
-  it('does not produce a 2D fit or overlay for FULL_BODY', () => {
+  it('fits a recognised full-body category from shoulders and hips, not the empty pose', () => {
     expect(
       fitFromPose(EMPTY_POSE, null, {
         garmentId: 'g',
@@ -134,10 +134,17 @@ describe('full-body categories stay off the 2D warp', () => {
     expect(
       overlaySourceForSelection({
         selected: true,
-        isTestFixture: true,
+        isTestFixture: false,
+        fitCategory: 'FULL_BODY',
+      }),
+    ).toBe('full_body_silhouette');
+    expect(
+      overlaySourceForSelection({
+        selected: true,
+        isTestFixture: false,
         fitCategory: 'FULL_BODY',
         hasOverlayAsset: true,
       }),
-    ).toBe('none');
+    ).toBe('catalog_overlay');
   });
 });

@@ -69,6 +69,9 @@ export default async function DisplaysPage() {
           </p>
         </div>
         <div className="flex items-center gap-4">
+          <Link href="/catalog" className="text-sm text-muted underline-offset-2 hover:underline">
+            Catalog
+          </Link>
           <Link href="/ops" className="text-sm text-muted underline-offset-2 hover:underline">
             Operations
           </Link>

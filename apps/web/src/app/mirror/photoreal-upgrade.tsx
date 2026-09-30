@@ -195,8 +195,8 @@ export function PhotorealUpgrade({
       >
         {family === 'FULL_BODY' ? (
           <p>
-            2D warp is not used for this garment. A realistic result appears only if a model returns
-            one.
+            The live mirror shows a pose silhouette for this garment, not a photograph. A realistic
+            still appears only if a model returns one.
           </p>
         ) : null}
         {choice === 'pending' ? (

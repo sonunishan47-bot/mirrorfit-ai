@@ -4,7 +4,7 @@ B2B retail smart mirror platform. A customer scans a QR code on an in-store
 mirror, browses the shop catalog from their own phone, and sees the selected
 garment rendered live on the mirror display.
 
-**Current state.** The shop mirror pairs by QR, the phone browses that shop’s catalog, and shirts and pants track locally with MediaPipe. A consented still can be sent to a private GPU worker (`WORKER_ENDPOINT_URL`) without a fake image. Full-body garments are not warped in 2D. Size advice, a 3D mannequin, bilingual catalog commands, and plan quotas are in the app. They do not replace the live camera path, and they do not call a language model or a VTON checkpoint unless you connect one.
+**Current state.** The shop mirror pairs by QR, the phone browses that shop’s catalog, and shirts and pants track locally with MediaPipe. Dress, abaya, kurta, churidar, and thobe track as a labelled pose silhouette — not the shirt warp, and not a photo. A consented still can be sent to a private GPU worker (`WORKER_ENDPOINT_URL`) without a fake image. Size advice, a 3D mannequin, bilingual catalog commands, and plan quotas are in the app. They do not replace the live camera path, and they do not call a language model or a VTON checkpoint unless you connect one.
 
 ## Layout
 
@@ -15,7 +15,7 @@ packages/validation   Shared Zod primitives and enum schemas.
 packages/protocol     Realtime wire protocol and transport abstraction.
 packages/tryon-core   Vision pipeline interfaces and performance measurement.
 packages/ui           Design tokens and shared UI utilities.
-supabase/migrations   Database migrations (empty until Phase 2).
+supabase/migrations   Applied schema: tenancy, devices, catalog, sessions, try-on jobs, storage.
 ```
 
 Packages ship TypeScript source and are compiled by Next through
@@ -97,9 +97,14 @@ Targets, measured rather than asserted:
 `@mirrorfit/tryon-core` record real samples. A metric with no samples reports
 `null`, never `0`, so an unmeasured stage cannot be mistaken for a fast one.
 
+## Try-on
+
+- **Shirt and pants:** live pose warp of an overlay on the mirror. Not a photograph.
+- **Dress, abaya, kurta, churidar, thobe:** recognised. A pose silhouette tracks the shoulders to the hem. It is not the shirt warp and not a photograph. An uploaded overlay image, if the shop has one, is placed on that same hem.
+- **Photorealistic still:** the mirror asks for consent, then `POST /api/device/tryon-jobs` stores one JPEG. The worker claims `/api/worker/tryon-jobs/claim` and completes `/api/worker/tryon-jobs/complete`. Point it at `WORKER_ENDPOINT_URL`. `RUNPOD_ENDPOINT_URL` is only a legacy alias for that same URL. If the URL is unset the job fails `VTON_NOT_CONNECTED`. The app does not draw a fake result.
+- **Catalog:** staff add garments at `/catalog` after signing in. The seed script is only for the labelled trial shirt and pants.
+
 ## Roadmap
 
-Phase 2 database schema and RLS, then device registration, kiosk shell, vision
-baseline, asset pipeline, QR pairing, customer catalog, live fitting, AI
-recommendations, size recommendation, staff requests, dashboard, offline cache,
-hardening, deployment.
+Shipped in this repository: tenancy, device enrollment, QR pairing, phone catalog, live pose fitting, full-body silhouettes, consented still jobs, a GPU worker boundary, size advice, a 3D mannequin, and shop operations. Still not connected: a real VTON checkpoint on the worker. That is a machine and a licence, not another app rewrite.
+

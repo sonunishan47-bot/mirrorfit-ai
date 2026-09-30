@@ -8,7 +8,7 @@ const TOP =
   /^(tops?|shirts?|t-?shirts?|tees?|blouses?|jackets?|hoodies?|sweaters?|coats?|cardigans?|vests?|tunics?|polos?|sweatshirts?|blazers?|windbreakers?)$/i;
 const LOWER =
   /^(pants?|trousers?|jeans?|shorts?|skirts?|leggings?|chinos?|joggers?|sweatpants?|cargos?|culottes?|overalls?)$/i;
-/** Whole garments. Never sent through the 2D shoulder/hip warp. */
+/** Whole garments. Placed with their own shoulder-to-hem silhouette, never the shirt warp. */
 const FULL =
   /^(churidars?|dress(?:es)?|abayas?|kurtas?|thobes?|sarees?|saris?|gowns?|jumpsuits?|full[-_ ]?body)$/i;
 
@@ -95,4 +95,42 @@ export function lowerOverlayDefaults(
     return DEFAULT_LOWER;
   }
   return DEFAULT_LOWER;
+}
+
+export type FullBodyKind = 'abaya' | 'dress' | 'kurta' | 'churidar' | 'thobe';
+
+export interface FullBodyOverlayDefaults {
+  readonly kind: FullBodyKind;
+  /** Shoulder line inside the silhouette bitmap. */
+  readonly anchor: { readonly x: number; readonly y: number };
+  readonly widthFactor: number;
+  /** Torso-heights added below the hips to reach the hem. */
+  readonly lengthFactor: number;
+  /** Hem width relative to the shoulder width. */
+  readonly hemFactor: number;
+}
+
+/**
+ * Known full-body categories. Null only when the name is not FULL_BODY.
+ * These are silhouette proportions, not a photograph of the garment.
+ */
+export function fullBodyOverlayDefaults(
+  category: string | null | undefined,
+): FullBodyOverlayDefaults | null {
+  if (resolveFitCategory(category) !== 'FULL_BODY') return null;
+  const value = category?.trim().toLowerCase() ?? '';
+  const anchor = { x: 0.5, y: 36 / 520 };
+  if (/^churidars?$/.test(value)) {
+    return { kind: 'churidar', anchor, widthFactor: 1.2, lengthFactor: 1.7, hemFactor: 0.42 };
+  }
+  if (/^kurtas?$/.test(value)) {
+    return { kind: 'kurta', anchor, widthFactor: 1.28, lengthFactor: 0.85, hemFactor: 0.92 };
+  }
+  if (/^thobes?$/.test(value)) {
+    return { kind: 'thobe', anchor, widthFactor: 1.22, lengthFactor: 1.85, hemFactor: 0.88 };
+  }
+  if (/^abayas?$/.test(value)) {
+    return { kind: 'abaya', anchor, widthFactor: 1.45, lengthFactor: 1.9, hemFactor: 1.35 };
+  }
+  return { kind: 'dress', anchor, widthFactor: 1.3, lengthFactor: 1.75, hemFactor: 1.12 };
 }

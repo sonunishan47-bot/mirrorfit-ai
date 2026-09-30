@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { deriveBodyGeometry } from './body-geometry';
+import { fullBodyOverlayDefaults } from './fit-category';
 import type { PoseFrame } from './geometry';
 import { deriveLowerBodyGeometry } from './lower-body-geometry';
 import {
   drawImageInParallelogram,
   lowerBodyWarpParallelogram,
   torsoWarpParallelogram,
+  fullBodyWarpParallelogram,
 } from './pose-warp';
 
 const TOP_POSE: PoseFrame = {
@@ -132,5 +134,26 @@ describe('drawImageInParallelogram', () => {
     expect(transform![5]).toBeCloseTo(tl.y);
     // Destination must be the unit square. Drawing w×h here was the physical bug.
     expect(drawArgs).toEqual([bitmap, 0, 0, 200, 280, 0, 0, 1, 1]);
+  });
+});
+
+describe('full-body warp', () => {
+  it('places an abaya hem below the hips and wider than a churidar', () => {
+    const geometry = deriveBodyGeometry(TOP_POSE);
+    expect(geometry).not.toBeNull();
+    const abaya = fullBodyOverlayDefaults('Abaya');
+    const churidar = fullBodyOverlayDefaults('Churidar');
+    const abayaQuad = fullBodyWarpParallelogram(geometry!, abaya ?? undefined);
+    const churidarQuad = fullBodyWarpParallelogram(geometry!, churidar ?? undefined);
+    const torso = torsoWarpParallelogram(geometry!);
+    expect(abayaQuad).not.toBeNull();
+    expect(churidarQuad).not.toBeNull();
+    expect(torso).not.toBeNull();
+    const hemY = (abayaQuad!.bottomLeft.y + abayaQuad!.bottomRight.y) / 2;
+    expect(hemY).toBeGreaterThan(geometry!.hipCenter.y);
+    expect(hemY).toBeGreaterThan((torso!.bottomLeft.y + torso!.bottomRight.y) / 2);
+    const abayaHem = Math.abs(abayaQuad!.bottomRight.x - abayaQuad!.bottomLeft.x);
+    const churidarHem = Math.abs(churidarQuad!.bottomRight.x - churidarQuad!.bottomLeft.x);
+    expect(abayaHem).toBeGreaterThan(churidarHem);
   });
 });

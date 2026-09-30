@@ -85,6 +85,58 @@ export function lowerBodyWarpParallelogram(
 }
 
 /**
+ * Shoulder-to-hem quad for a known full-body category.
+ * Not the shirt torso quad and not a photorealistic drape.
+ */
+export function fullBodyWarpParallelogram(
+  geometry: BodyGeometry,
+  options?: {
+    readonly widthFactor?: number;
+    readonly lengthFactor?: number;
+    readonly hemFactor?: number;
+  },
+): WarpParallelogram | null {
+  if (
+    ![
+      geometry.shoulderWidth,
+      geometry.torsoHeight,
+      geometry.roll,
+      geometry.shoulderCenter.x,
+      geometry.shoulderCenter.y,
+      geometry.hipCenter.x,
+      geometry.hipCenter.y,
+    ].every(Number.isFinite)
+  ) {
+    return null;
+  }
+  if (geometry.shoulderWidth <= 0 || geometry.torsoHeight <= 0) return null;
+
+  const widthFactor = positive(options?.widthFactor, 1.3);
+  const lengthFactor = positive(options?.lengthFactor, 1.7);
+  const hemFactor = positive(options?.hemFactor, 1);
+  const dropX = geometry.hipCenter.x - geometry.shoulderCenter.x;
+  const dropY = geometry.hipCenter.y - geometry.shoulderCenter.y;
+  const drop = Math.hypot(dropX, dropY);
+  if (drop <= 0) return null;
+  const hem = {
+    x: geometry.hipCenter.x + (dropX / drop) * geometry.torsoHeight * lengthFactor,
+    y: geometry.hipCenter.y + (dropY / drop) * geometry.torsoHeight * lengthFactor,
+  };
+  const topHalf = (geometry.shoulderWidth * widthFactor) / 2;
+  const bottomHalf = topHalf * hemFactor;
+  const topLeft = offsetAlongRoll(geometry.shoulderCenter, geometry.roll, -topHalf);
+  const topRight = offsetAlongRoll(geometry.shoulderCenter, geometry.roll, topHalf);
+  const bottomLeft = offsetAlongRoll(hem, geometry.roll, -bottomHalf);
+  const bottomRight = offsetAlongRoll(hem, geometry.roll, bottomHalf);
+  if (![topLeft, topRight, bottomRight, bottomLeft].every(pointFinite)) return null;
+  return { topLeft, topRight, bottomRight, bottomLeft };
+}
+
+function positive(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+/**
  * Draws `bitmap` into a normalized-frame parallelogram on a pixel canvas.
  * Uses a three-point affine map (TL, TR, BL). Returns false when degenerate.
  *

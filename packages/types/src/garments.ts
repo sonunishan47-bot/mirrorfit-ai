@@ -12,8 +12,9 @@ export type GarmentAudience = (typeof GARMENT_AUDIENCES)[number];
 /**
  * Fitting families.
  *
- * TOP and LOWER_BODY are the live 2D overlay families.
- * FULL_BODY is photorealistic-only: the 2D engine must not warp it.
+ * TOP uses the shirt parallelogram. LOWER_BODY uses the pants parallelogram.
+ * FULL_BODY uses its own shoulder-to-hem silhouette. Do not send it through
+ * the shirt warp. A photograph still requires the GPU worker.
  */
 export const GARMENT_FIT_CATEGORIES = ['TOP', 'LOWER_BODY', 'FULL_BODY'] as const;
 export type GarmentFitCategory = (typeof GARMENT_FIT_CATEGORIES)[number];

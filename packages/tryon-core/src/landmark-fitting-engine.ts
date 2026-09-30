@@ -225,7 +225,7 @@ export function fitFromPose(
 ): { fit: FittingResult | null; status: FitStatus } {
   if (!garment) return { fit: null, status: 'not_ready' };
   const family = resolveFitCategory(garment.category);
-  if (family !== 'TOP' && family !== 'LOWER_BODY') {
+  if (family !== 'TOP' && family !== 'LOWER_BODY' && family !== 'FULL_BODY') {
     return { fit: null, status: 'not_ready' };
   }
   // Use joints required for this family — not the mean of every mapped
@@ -238,6 +238,10 @@ export function fitFromPose(
 
   if (family === 'LOWER_BODY') {
     return fitLowerBodyFromPose(pose, garment, options, jointConfidence);
+  }
+
+  if (family === 'FULL_BODY') {
+    return fitTopFromPose(pose, geometry, options, jointConfidence);
   }
 
   return fitTopFromPose(pose, geometry, options, jointConfidence);
@@ -362,6 +366,9 @@ export function fittingJointConfidence(pose: PoseFrame, family: GarmentFitCatego
     ];
     if (joints.some((joint) => joint === null)) return 0;
     return Math.min(...joints.map((joint) => joint!.confidence));
+  }
+  if (family === 'FULL_BODY') {
+    return fittingJointConfidence(pose, 'TOP');
   }
   if (family === 'LOWER_BODY') {
     const hips = [keypointByName(pose, 'LEFT_HIP'), keypointByName(pose, 'RIGHT_HIP')];
