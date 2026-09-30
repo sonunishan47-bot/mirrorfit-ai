@@ -68,3 +68,16 @@ FASHN_WEIGHTS_DIR=./weights python server.py
 ```
 
 Set `MODEL_NAME=fashn` and `WORKER_ENDPOINT_URL=http://127.0.0.1:8090/infer` on the Node worker. The server binds to localhost. It copies the captured face back onto the result and, when the shop wall can be separated, places the person on a plain studio gradient. If the weights are missing it returns 503 and no JPEG.
+
+## Private test stack
+
+This section is a lab trial, not the shop default. Set `MODEL_ALLOW_NONCOMMERCIAL=1` only on that machine. The mirror still uploads one consented JPEG. It does not upload video, and it does not draw a result when ComfyUI returns nothing.
+
+Run one model until a single photo looks right. Do not start with TensorRT or LCM.
+
+1. **IDM-VTON still, ComfyUI.** Install [ComfyUI](https://github.com/comfyanonymous/ComfyUI), then [TemryL/ComfyUI-IDM-VTON](https://github.com/TemryL/ComfyUI-IDM-VTON) (`python install.py` downloads the IDM weights). That workflow also needs ComfyUI Segment Anything for the garment mask and `comfyui_controlnet_aux` for DensePose. Load the example workflow. Run one person photo and one shirt at 768×1024, 30 steps, guidance 2.0. Write down the seconds, and whether the face and the garment stitching survived. 16GB VRAM is the minimum that node set asks for.
+2. **Mask.** Use the SAM mask inside that same workflow. Add a separate SAM pass only if the shirt edge bleeds on that photo.
+3. **Pants and full garments.** IDM in this app is a top profile. If the shirt still is acceptable and pants or a dress fail, repeat step 1 with OOTDiffusion for lower-body and full-body. Do not run both models on one photo.
+4. **Speed, after the picture is right.** First drop steps (30, then 20, then 15) and keep the garment text. LCM-style 4–8 steps only if the logos still match. TensorRT is NVIDIA-only and comes last. It can shorten one still. It does not make a 30 fps mirror.
+
+The live path stays MediaPipe. A test still that takes several seconds does not replace it.
