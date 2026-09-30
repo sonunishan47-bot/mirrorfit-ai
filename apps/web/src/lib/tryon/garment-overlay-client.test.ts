@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { requestUrl } from '@/lib/fetch-text';
+
 import { fetchGarmentOverlay } from './garment-overlay-client';
 
 const SECRET = 'e'.repeat(43);
@@ -11,14 +13,11 @@ describe('fetchGarmentOverlay', () => {
   it('calls the device overlay route with a bearer and no tenancy fields', async () => {
     let url = '';
     let init: RequestInit | undefined;
-    const overlay = await fetchGarmentOverlay(
-      SECRET,
-      GARMENT,
-      VARIANT,
-      async (input, requestInit) => {
-        url = String(input);
-        init = requestInit;
-        return new Response(
+    const overlay = await fetchGarmentOverlay(SECRET, GARMENT, VARIANT, (input, requestInit) => {
+      url = requestUrl(input);
+      init = requestInit;
+      return Promise.resolve(
+        new Response(
           JSON.stringify({
             overlay_url: 'https://cdn.example/overlay.png?token=1',
             expires_in: 120,
@@ -32,9 +31,9 @@ describe('fetchGarmentOverlay', () => {
             anchor: { x: 0.5, y: 0.25 },
           }),
           { status: 200 },
-        );
-      },
-    );
+        ),
+      );
+    });
 
     expect(url).toContain('/api/device/garment-overlay?');
     expect(url).toContain(`garment_id=${GARMENT}`);
@@ -47,25 +46,17 @@ describe('fetchGarmentOverlay', () => {
   });
 
   it('returns null when the mirror has no overlay asset', async () => {
-    const overlay = await fetchGarmentOverlay(
-      SECRET,
-      GARMENT,
-      VARIANT,
-      async () => new Response(JSON.stringify({ error: 'INVALID_REQUEST' }), { status: 400 }),
+    const overlay = await fetchGarmentOverlay(SECRET, GARMENT, VARIANT, () =>
+      Promise.resolve(new Response(JSON.stringify({ error: 'INVALID_REQUEST' }), { status: 400 })),
     );
     expect(overlay).toBeNull();
   });
 
   it('does not invent an overlay from a malformed body', async () => {
-    const spy = vi.fn(
-      async () => new Response(JSON.stringify({ overlay_url: 'nope' }), { status: 200 }),
+    const spy = vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify({ overlay_url: 'nope' }), { status: 200 })),
     );
-    const overlay = await fetchGarmentOverlay(
-      SECRET,
-      GARMENT,
-      VARIANT,
-      spy as unknown as typeof fetch,
-    );
+    const overlay = await fetchGarmentOverlay(SECRET, GARMENT, VARIANT, spy);
     expect(overlay).toBeNull();
   });
 
@@ -84,19 +75,16 @@ describe('fetchGarmentOverlay', () => {
   });
 
   it('returns null when the response body is not JSON', async () => {
-    const overlay = await fetchGarmentOverlay(
-      SECRET,
-      GARMENT,
-      VARIANT,
-      async () => new Response('not-json', { status: 200 }),
+    const overlay = await fetchGarmentOverlay(SECRET, GARMENT, VARIANT, () =>
+      Promise.resolve(new Response('not-json', { status: 200 })),
     );
     expect(overlay).toBeNull();
   });
 
   it('returns null on network failure instead of throwing', async () => {
-    const overlay = await fetchGarmentOverlay(SECRET, GARMENT, VARIANT, async () => {
-      throw new Error('offline');
-    });
+    const overlay = await fetchGarmentOverlay(SECRET, GARMENT, VARIANT, () =>
+      Promise.reject(new Error('offline')),
+    );
     expect(overlay).toBeNull();
   });
 });

@@ -9,7 +9,6 @@
  * own GPU). RUNPOD_ENDPOINT_URL is only a legacy alias. No public GPU port.
  */
 import { register } from 'node:module';
-import { pathToFileURL } from 'node:url';
 
 register('./tryon-ts-resolve.mjs', import.meta.url);
 

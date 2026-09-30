@@ -99,7 +99,7 @@ describe('product share', () => {
         openUrl: () => {
           throw new Error('blocked');
         },
-        copyText: async () => true,
+        copyText: () => Promise.resolve(true),
       },
     });
     expect(result.ok).toBe(true);
@@ -112,7 +112,7 @@ describe('product share', () => {
         openUrl: () => {
           throw new Error('blocked');
         },
-        copyText: async () => false,
+        copyText: () => Promise.resolve(false),
       },
     });
     expect(result.ok).toBe(false);

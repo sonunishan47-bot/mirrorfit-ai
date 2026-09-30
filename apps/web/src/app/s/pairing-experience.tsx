@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { BrandHeader } from '@/components/customer/brand-header';
 import { ErrorState } from '@/components/customer/error-state';
@@ -49,9 +49,23 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
+const SERVER_LOCATION_KEY = 'server';
+
+function subscribeBrowserLocation(onChange: () => void): () => void {
+  window.addEventListener('popstate', onChange);
+  return () => window.removeEventListener('popstate', onChange);
+}
+
+function inspectLocationKey(locationKey: string) {
+  const splitAt = locationKey.indexOf('\n');
+  const origin = splitAt === -1 ? locationKey : locationKey.slice(0, splitAt);
+  const search = splitAt === -1 ? '' : locationKey.slice(splitAt + 1);
+  return inspectPairingSearch(origin, search);
+}
+
 /**
- * Customer pairing. The raw token stays in a ref and is sent only to
- * POST /api/session/claim. It is never written into the DOM, logs, or storage.
+ * Customer pairing. The raw token is derived from the URL when claiming.
+ * It is never written into the DOM, logs, or storage.
  */
 export function PairingExperience({
   startKind = 'loading',
@@ -59,29 +73,36 @@ export function PairingExperience({
   claim = claimPairingSession,
   delayMs,
 }: PairingExperienceProps) {
-  const tokenRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const [status, setStatus] = useState<CustomerStatus>(() => statusFromStart(startKind));
   const [invalidKind, setInvalidKind] = useState<CustomerInvalidKind>(
     startKind === 'malformed' ? 'malformed' : 'missing',
   );
   const [failureKind, setFailureKind] = useState<ClaimFailureReason>('server');
+  const locationKey = useSyncExternalStore(
+    subscribeBrowserLocation,
+    () => {
+      const location = readLocation();
+      return `${location.origin}\n${location.search}`;
+    },
+    () => SERVER_LOCATION_KEY,
+  );
+  const [appliedLocation, setAppliedLocation] = useState(SERVER_LOCATION_KEY);
+
+  if (locationKey !== SERVER_LOCATION_KEY && appliedLocation !== locationKey) {
+    const inspected = inspectLocationKey(locationKey);
+    setAppliedLocation(locationKey);
+    if (inspected.kind === 'ok') {
+      setStatus((current) => reduceCustomer(current, 'TOKEN_READY'));
+    } else {
+      setInvalidKind(inspected.kind);
+      setStatus((current) =>
+        reduceCustomer(current, inspected.kind === 'missing' ? 'TOKEN_MISSING' : 'TOKEN_MALFORMED'),
+      );
+    }
+  }
 
   const view = presentCustomer(status, { invalidKind, failureKind });
-
-  useEffect(() => {
-    const inspected = inspectPairingSearch(readLocation().origin, readLocation().search);
-    if (inspected.kind === 'ok') {
-      tokenRef.current = inspected.token;
-      setStatus((current) => reduceCustomer(current, 'TOKEN_READY'));
-      return;
-    }
-    tokenRef.current = null;
-    setInvalidKind(inspected.kind);
-    setStatus((current) =>
-      reduceCustomer(current, inspected.kind === 'missing' ? 'TOKEN_MISSING' : 'TOKEN_MALFORMED'),
-    );
-  }, [readLocation]);
 
   useEffect(() => {
     if (status !== 'CONNECTED' && status !== 'ACTIVATING') return;
@@ -100,14 +121,13 @@ export function PairingExperience({
 
   // Stable identity so SessionCatalog does not remount-fetch on every parent render.
   const readToken = useCallback((): string | null => {
-    if (tokenRef.current) return tokenRef.current;
-    const inspected = inspectPairingSearch(readLocation().origin, readLocation().search);
-    if (inspected.kind === 'ok') {
-      tokenRef.current = inspected.token;
-      return inspected.token;
-    }
-    return null;
-  }, [readLocation]);
+    const key =
+      locationKey === SERVER_LOCATION_KEY
+        ? `${readLocation().origin}\n${readLocation().search}`
+        : locationKey;
+    const inspected = inspectLocationKey(key);
+    return inspected.kind === 'ok' ? inspected.token : null;
+  }, [locationKey, readLocation]);
 
   async function onConnect(): Promise<void> {
     const token = readToken();

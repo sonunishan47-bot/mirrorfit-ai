@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { FrameRateCounter, resolveFitCategory } from '@mirrorfit/tryon-core';
 
@@ -16,9 +16,11 @@ import {
 import { startHeartbeatLoop } from '@/lib/device/heartbeat-loop';
 import {
   clearDeviceCredential,
+  deviceCredentialServerSnapshot,
+  deviceCredentialSnapshot,
   loadDeviceCredential,
   saveDeviceCredential,
-  type StoredDeviceCredential,
+  subscribeDeviceCredential,
 } from '@/lib/device/store';
 import { noteCameraFrame } from '@/lib/kiosk/fps';
 import { KioskAnalyticsBuffer } from '@/lib/kiosk/kiosk-analytics';
@@ -89,12 +91,17 @@ export function KioskShell() {
   const prevStatusRef = useRef<KioskStatus>('IDLE');
   const [pollHealth, setPollHealth] = useState<'ok' | 'degraded'>('ok');
 
-  const [device, setDevice] = useState<StoredDeviceCredential | null>(null);
+  const device = useSyncExternalStore(
+    subscribeDeviceCredential,
+    deviceCredentialSnapshot,
+    deviceCredentialServerSnapshot,
+  );
   const [status, setStatus] = useState<KioskStatus>('IDLE');
   const [camera, setCamera] = useState<CameraStatus>('starting');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [pairingUrl, setPairingUrl] = useState<string | null>(null);
   const [qrSvg, setQrSvg] = useState<string | null>(null);
+  const [qrFor, setQrFor] = useState<string | null>(null);
   const [enrollError, setEnrollError] = useState<string | null>(null);
   const [openAttempt, setOpenAttempt] = useState(0);
   const [powerPhase, setPowerPhase] = useState<PowerSavePhase>('awake');
@@ -115,6 +122,10 @@ export function KioskShell() {
 
   const view = presentKiosk(status);
   const qrValue = pairingQrValue(pairingUrl, device?.deviceSecret ?? null);
+  if (qrValue !== qrFor) {
+    setQrFor(qrValue);
+    setQrSvg(null);
+  }
   const showScreensaver = shouldShowScreensaver(status, powerPhase);
   const tryOnActive = shouldRunTryOnPipeline(status, powerPhase);
   const customerGarment = status === 'ACTIVE' ? selectedGarment : null;
@@ -141,10 +152,6 @@ export function KioskShell() {
   useEffect(() => {
     powerPhaseRef.current = powerPhase;
   }, [powerPhase]);
-
-  useEffect(() => {
-    setDevice(loadDeviceCredential());
-  }, []);
 
   // Presence / claim / garment changes count as activity + coarse analytics.
   useEffect(() => {
@@ -320,7 +327,6 @@ export function KioskShell() {
       fetchFn: fetch,
       onUnauthorized: () => {
         clearDeviceCredential();
-        setDevice(null);
         lifecycleRef.current.markSessionEnded();
         clearSessionUi();
         setStatus('IDLE');
@@ -329,7 +335,7 @@ export function KioskShell() {
 
     void loop.tick();
     return () => loop.stop();
-  }, [device, camera]);
+  }, [device, camera, cameraPresence]);
 
   useEffect(() => {
     if (!device || status !== 'IDLE') return;
@@ -464,10 +470,7 @@ export function KioskShell() {
   }, [status]);
 
   useEffect(() => {
-    if (!qrValue) {
-      setQrSvg(null);
-      return;
-    }
+    if (!qrValue) return;
 
     let cancelled = false;
     void import('@/lib/kiosk/qr-svg')
@@ -491,7 +494,8 @@ export function KioskShell() {
 
   async function onEnroll(formData: FormData): Promise<void> {
     setEnrollError(null);
-    const code = String(formData.get('code') ?? '');
+    const rawCode = formData.get('code');
+    const code = typeof rawCode === 'string' ? rawCode : '';
     try {
       const enrolled = await enrollDevice(code);
       const saved = saveDeviceCredential(enrolled);
@@ -505,7 +509,6 @@ export function KioskShell() {
         );
         return;
       }
-      setDevice(enrolled);
       noteActivity(true);
     } catch {
       setEnrollError('That code could not be used. Ask staff for a new one.');

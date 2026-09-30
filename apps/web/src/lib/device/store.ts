@@ -153,6 +153,60 @@ export function loadDeviceCredential(
   return parsedLegacy;
 }
 
+const credentialListeners = new Set<() => void>();
+let credentialCacheReady = false;
+let cachedCredentialKey = '';
+let cachedCredential: StoredDeviceCredential | null = null;
+
+function invalidateDeviceCredentialCache(): void {
+  credentialCacheReady = false;
+  for (const listener of credentialListeners) listener();
+}
+
+/** Subscribe for same-tab saves and clears, plus other-tab storage events. */
+export function subscribeDeviceCredential(onStoreChange: () => void): () => void {
+  credentialListeners.add(onStoreChange);
+  const onStorage = (event: StorageEvent) => {
+    if (
+      event.key !== null &&
+      event.key !== DEVICE_STORAGE_KEY &&
+      event.key !== DEVICE_STORAGE_KEY_LEGACY
+    ) {
+      return;
+    }
+    credentialCacheReady = false;
+    onStoreChange();
+  };
+  window.addEventListener('storage', onStorage);
+  return () => {
+    credentialListeners.delete(onStoreChange);
+    window.removeEventListener('storage', onStorage);
+  };
+}
+
+/** Server and the first hydration render have no kiosk credential. */
+export function deviceCredentialServerSnapshot(): StoredDeviceCredential | null {
+  return null;
+}
+
+/**
+ * Cached local credential. The same object is returned until storage changes,
+ * which is what `useSyncExternalStore` requires.
+ */
+export function deviceCredentialSnapshot(): StoredDeviceCredential | null {
+  const store = browserStore();
+  const raw = store ? safeGetItem(store, DEVICE_STORAGE_KEY) : null;
+  const key = raw ?? '';
+  if (credentialCacheReady && key === cachedCredentialKey) return cachedCredential;
+
+  const loaded = store ? loadDeviceCredential(store) : null;
+  const nextRaw = store ? safeGetItem(store, DEVICE_STORAGE_KEY) : null;
+  cachedCredentialKey = nextRaw ?? '';
+  cachedCredential = loaded;
+  credentialCacheReady = true;
+  return cachedCredential;
+}
+
 /**
  * Persists a validated credential. Returns a structured result so callers can
  * show a clear message when storage is blocked — never invents a secret.
@@ -178,6 +232,7 @@ export function saveDeviceCredential(
   }
   // Avoid leaving a stale legacy copy that could diverge.
   safeRemoveItem(store, DEVICE_STORAGE_KEY_LEGACY);
+  invalidateDeviceCredentialCache();
   return { ok: true };
 }
 
@@ -185,4 +240,5 @@ export function clearDeviceCredential(store: KeyValueStore | null = browserStore
   if (!store) return;
   safeRemoveItem(store, DEVICE_STORAGE_KEY);
   safeRemoveItem(store, DEVICE_STORAGE_KEY_LEGACY);
+  invalidateDeviceCredentialCache();
 }

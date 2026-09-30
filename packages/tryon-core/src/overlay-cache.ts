@@ -86,7 +86,7 @@ export class OverlayBitmapCache {
 
   #evictIfNeeded(): void {
     while (this.#entries.size > this.#maxEntries) {
-      const oldest = this.#entries.keys().next().value as string | undefined;
+      const oldest = this.#entries.keys().next().value;
       if (oldest === undefined) break;
       const entry = this.#entries.get(oldest);
       this.#entries.delete(oldest);

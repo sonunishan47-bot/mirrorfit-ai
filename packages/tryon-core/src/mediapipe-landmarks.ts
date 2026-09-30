@@ -37,39 +37,58 @@ export interface MediaPipeLandmarkLike {
   readonly presence?: number;
 }
 
+function isUnknownArray(value: unknown): value is readonly unknown[] {
+  return Array.isArray(value);
+}
+
+function readLandmark(point: unknown): MediaPipeLandmarkLike | null {
+  if (typeof point !== 'object' || point === null) return null;
+  const record = point as Record<string, unknown>;
+  const x = record['x'];
+  const y = record['y'];
+  if (typeof x !== 'number' || typeof y !== 'number') return null;
+  const z = record['z'];
+  const visibility = record['visibility'];
+  const presence = record['presence'];
+  return {
+    x,
+    y,
+    ...(typeof z === 'number' ? { z } : {}),
+    ...(typeof visibility === 'number' ? { visibility } : {}),
+    ...(typeof presence === 'number' ? { presence } : {}),
+  };
+}
+
 /**
  * Converts official MediaPipe landmark output into our PoseFrame.
  *
  * Invalid or unmapped points are omitted. An empty result is null — no person
  * — never a fabricated skeleton.
  */
-export function poseFrameFromMediaPipe(
-  landmarks: readonly MediaPipeLandmarkLike[] | undefined | null,
-  timestampMs: number,
-): PoseFrame | null {
+export function poseFrameFromMediaPipe(landmarks: unknown, timestampMs: number): PoseFrame | null {
   // Empty / missing person → null. Non-arrays (corrupt WASM output) → null.
   // Sparse holes in the landmark list must not throw on point.visibility.
-  if (!landmarks || !Array.isArray(landmarks) || landmarks.length === 0) return null;
+  if (!isUnknownArray(landmarks) || landmarks.length === 0) return null;
   if (!Number.isFinite(timestampMs) || timestampMs < 0) return null;
 
   const keypoints = [];
   let visibilitySum = 0;
   let visibilityCount = 0;
   for (const [index, point] of landmarks.entries()) {
-    if (!point || typeof point !== 'object') continue;
+    const landmark = readLandmark(point);
     const name = MEDIAPIPE_TO_COCO[index];
-    if (!name) continue;
+    if (!landmark || !name) continue;
     const confidence =
-      typeof point.visibility === 'number'
-        ? point.visibility
-        : typeof point.presence === 'number'
-          ? point.presence
+      typeof landmark.visibility === 'number'
+        ? landmark.visibility
+        : typeof landmark.presence === 'number'
+          ? landmark.presence
           : Number.NaN;
     const parsed = parseKeypoint({
       name,
-      x: point.x,
-      y: point.y,
-      z: typeof point.z === 'number' ? point.z : null,
+      x: landmark.x,
+      y: landmark.y,
+      z: typeof landmark.z === 'number' ? landmark.z : null,
       confidence,
     });
     if (!parsed) continue;

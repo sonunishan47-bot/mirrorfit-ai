@@ -40,9 +40,8 @@ afterEach(() => {
 });
 
 beforeEach(() => {
-  vi.stubGlobal(
-    'fetch',
-    async () => new Response(JSON.stringify({ garments: [] }), { status: 200 }),
+  vi.stubGlobal('fetch', () =>
+    Promise.resolve(new Response(JSON.stringify({ garments: [] }), { status: 200 })),
   );
 });
 
@@ -90,6 +89,7 @@ describe('customer /s pairing experience', () => {
 
     await act(async () => {
       resolveClaim({ ok: true, sessionId: SESSION_ID, status: 'PAIRED' });
+      await Promise.resolve();
     });
 
     expect(await screen.findByText('Mirror Ready')).toBeTruthy();
@@ -105,7 +105,7 @@ describe('customer /s pairing experience', () => {
   it('shows a friendly invalid-code error and does not offer a doomed retry', async () => {
     renderPairing({
       search: `?t=${TOKEN}`,
-      claim: async () => ({ ok: false, reason: 'invalid' }),
+      claim: () => Promise.resolve({ ok: false, reason: 'invalid' }),
     });
     fireEvent.click(await screen.findByRole('button', { name: 'Connect' }));
     expect(await screen.findByRole('alert')).toBeTruthy();
@@ -136,7 +136,7 @@ describe('customer /s pairing experience', () => {
   it('maps a server failure to a customer-safe retry', async () => {
     renderPairing({
       search: `?t=${TOKEN}`,
-      claim: async () => ({ ok: false, reason: 'server' }),
+      claim: () => Promise.resolve({ ok: false, reason: 'server' }),
     });
     fireEvent.click(await screen.findByRole('button', { name: 'Connect' }));
     expect(await screen.findByText('Something went wrong')).toBeTruthy();

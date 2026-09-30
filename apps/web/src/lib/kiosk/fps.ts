@@ -1,5 +1,4 @@
-import type { CameraFrame } from '@mirrorfit/tryon-core';
-import { FrameRateCounter } from '@mirrorfit/tryon-core';
+import type { CameraFrame, FrameRateCounter } from '@mirrorfit/tryon-core';
 
 /**
  * Records a local camera frame and returns the measured FPS.

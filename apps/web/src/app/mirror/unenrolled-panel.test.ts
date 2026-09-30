@@ -11,8 +11,9 @@ afterEach(cleanup);
 
 describe('unenrolled kiosk panel', () => {
   it('does not invent a credential and submits via button click, not a GET', () => {
-    const onEnroll = vi.fn(async (formData: FormData) => {
+    const onEnroll = vi.fn((formData: FormData) => {
       expect(formData.get('code')).toBe('STAFFCODE12');
+      return Promise.resolve();
     });
 
     render(createElement(UnenrolledPanel, { error: null, onEnroll }));
@@ -27,7 +28,10 @@ describe('unenrolled kiosk panel', () => {
       'button',
     );
 
-    const input = screen.getByLabelText('Enrollment code') as HTMLInputElement;
+    const input = screen.getByLabelText('Enrollment code');
+    if (!(input instanceof HTMLInputElement)) {
+      throw new Error('Enrollment code is not an input');
+    }
     input.value = 'STAFFCODE12';
     fireEvent.click(screen.getByRole('button', { name: 'Enroll this mirror' }));
 
@@ -38,7 +42,7 @@ describe('unenrolled kiosk panel', () => {
     render(
       createElement(UnenrolledPanel, {
         error: 'That code could not be used. Ask staff for a new one.',
-        onEnroll: async () => undefined,
+        onEnroll: () => Promise.resolve(),
       }),
     );
 

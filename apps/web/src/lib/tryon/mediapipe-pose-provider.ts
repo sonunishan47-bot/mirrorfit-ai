@@ -176,6 +176,10 @@ export async function createKioskPoseProvider(): Promise<PoseProvider> {
   );
 }
 
+function isUnknownArray(value: unknown): value is readonly unknown[] {
+  return Array.isArray(value);
+}
+
 /**
  * Safely picks the first person landmark list from MediaPipe detectForVideo output.
  * Returns null when landmarks are missing, empty, or not an array — never throws
@@ -185,15 +189,35 @@ export function firstPersonLandmarks(
   result: { landmarks?: unknown } | null | undefined,
 ): Array<{ x: number; y: number; z?: number; visibility?: number; presence?: number }> | null {
   const people = result?.landmarks;
-  const person = Array.isArray(people) ? people[0] : undefined;
-  if (!Array.isArray(person) || person.length === 0) return null;
-  return person as Array<{
+  if (!isUnknownArray(people) || people.length === 0) return null;
+  const person = people[0];
+  if (!isUnknownArray(person) || person.length === 0) return null;
+
+  const landmarks: Array<{
     x: number;
     y: number;
     z?: number;
     visibility?: number;
     presence?: number;
-  }>;
+  }> = [];
+  for (const point of person) {
+    if (typeof point !== 'object' || point === null) return null;
+    const record = point as Record<string, unknown>;
+    const x = record['x'];
+    const y = record['y'];
+    if (typeof x !== 'number' || typeof y !== 'number') return null;
+    const z = record['z'];
+    const visibility = record['visibility'];
+    const presence = record['presence'];
+    landmarks.push({
+      x,
+      y,
+      ...(typeof z === 'number' ? { z } : {}),
+      ...(typeof visibility === 'number' ? { visibility } : {}),
+      ...(typeof presence === 'number' ? { presence } : {}),
+    });
+  }
+  return landmarks;
 }
 
 /** HEAD/GET probe so a missing model fails with an operator-facing message. */

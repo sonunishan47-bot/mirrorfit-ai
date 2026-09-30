@@ -104,8 +104,8 @@ describe('poseFrameFromMediaPipe', () => {
     sparse[12] = { x: 0.65, y: 0.3, visibility: 0.85 };
     // index 23 intentionally left undefined (hole) — must not throw
     sparse[24] = { x: 0.6, y: 0.62, visibility: 0.8 };
-    expect(() => poseFrameFromMediaPipe(sparse as MediaPipeLandmarkLike[], 50)).not.toThrow();
-    const frame = poseFrameFromMediaPipe(sparse as MediaPipeLandmarkLike[], 50);
+    expect(() => poseFrameFromMediaPipe(sparse, 50)).not.toThrow();
+    const frame = poseFrameFromMediaPipe(sparse, 50);
     expect(frame).not.toBeNull();
     expect(frame?.keypoints.some((p) => p.name === 'LEFT_HIP')).toBe(false);
     expect(frame?.keypoints.some((p) => p.name === 'RIGHT_HIP')).toBe(true);
@@ -113,6 +113,6 @@ describe('poseFrameFromMediaPipe', () => {
 
   it('returns null for non-array landmark payloads without throwing', () => {
     expect(poseFrameFromMediaPipe(null, 1)).toBeNull();
-    expect(poseFrameFromMediaPipe({} as unknown as MediaPipeLandmarkLike[], 1)).toBeNull();
+    expect(poseFrameFromMediaPipe({}, 1)).toBeNull();
   });
 });

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { bodyText, requestUrl } from '@/lib/fetch-text';
+
 import { reduceKiosk } from './machine';
 import { createSessionLifecycle } from './session-lifecycle';
 import {
@@ -31,23 +33,25 @@ describe('session creation', () => {
     let url = '';
     let init: RequestInit | undefined;
 
-    const created = await createKioskSession(SECRET, async (input, requestInit) => {
-      url = String(input);
+    const created = await createKioskSession(SECRET, (input, requestInit) => {
+      url = requestUrl(input);
       init = requestInit;
-      return new Response(
-        JSON.stringify({
-          session_id: SESSION_ID,
-          status: 'WAITING',
-          pairing_url: PAIRING_URL,
-          pairing_expires_at: '2026-01-01T00:02:00.000Z',
-        }),
-        { status: 200 },
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            session_id: SESSION_ID,
+            status: 'WAITING',
+            pairing_url: PAIRING_URL,
+            pairing_expires_at: '2026-01-01T00:02:00.000Z',
+          }),
+          { status: 200 },
+        ),
       );
     });
 
     expect(url).toBe('/api/session/create');
     expect(init?.headers).toMatchObject({ authorization: `Bearer ${SECRET}` });
-    expect(String(init?.body)).not.toContain('organization_id');
+    expect(bodyText(init?.body)).not.toContain('organization_id');
     expect(created.sessionId).toBe(SESSION_ID);
     expect(created.pairingUrl).toBe(PAIRING_URL);
     expect(pairingQrValue(created.pairingUrl, SECRET)).toBe(PAIRING_URL);
@@ -56,9 +60,8 @@ describe('session creation', () => {
 
   it('does not invent a session when the API refuses', async () => {
     await expect(
-      createKioskSession(
-        SECRET,
-        async () => new Response(JSON.stringify({ error: 'UNAUTHORIZED' }), { status: 401 }),
+      createKioskSession(SECRET, () =>
+        Promise.resolve(new Response(JSON.stringify({ error: 'UNAUTHORIZED' }), { status: 401 })),
       ),
     ).rejects.toThrow('Session create failed');
   });
@@ -79,12 +82,14 @@ describe('claim → paired → active', () => {
     status = reduceKiosk(status, 'PAIRING_CLAIMED');
     expect(status).toBe('PAIRED');
 
-    const activated = await activateKioskSession(SECRET, SESSION_ID, async (input, init) => {
-      expect(String(input)).toBe('/api/session/activate');
-      expect(JSON.parse(String(init?.body))).toEqual({ session_id: SESSION_ID });
-      return new Response(JSON.stringify({ session_id: SESSION_ID, status: 'ACTIVE' }), {
-        status: 200,
-      });
+    const activated = await activateKioskSession(SECRET, SESSION_ID, (input, init) => {
+      expect(requestUrl(input)).toBe('/api/session/activate');
+      expect(JSON.parse(bodyText(init?.body))).toEqual({ session_id: SESSION_ID });
+      return Promise.resolve(
+        new Response(JSON.stringify({ session_id: SESSION_ID, status: 'ACTIVE' }), {
+          status: 200,
+        }),
+      );
     });
     expect(activated).toBe(true);
     status = reduceKiosk(status, 'SESSION_ACTIVATED');
@@ -115,18 +120,20 @@ describe('claim → paired → active', () => {
 
 describe('live session read', () => {
   it('reads the current session without inventing a lifecycle RPC', async () => {
-    const live = await readLiveSession(SECRET, async (input, init) => {
-      expect(String(input)).toBe('/api/session/current');
+    const live = await readLiveSession(SECRET, (input, init) => {
+      expect(requestUrl(input)).toBe('/api/session/current');
       expect(init?.method ?? 'GET').toBe('GET');
-      return new Response(
-        JSON.stringify({
-          session: {
-            session_id: SESSION_ID,
-            status: 'WAITING',
-            pairing_expires_at: '2026-01-01T00:02:00.000Z',
-          },
-        }),
-        { status: 200 },
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            session: {
+              session_id: SESSION_ID,
+              status: 'WAITING',
+              pairing_expires_at: '2026-01-01T00:02:00.000Z',
+            },
+          }),
+          { status: 200 },
+        ),
       );
     });
     expect(live).toEqual({
@@ -139,65 +146,64 @@ describe('live session read', () => {
 
   it('rejects a revoked device secret', async () => {
     await expect(
-      readLiveSession(SECRET, async () => new Response(null, { status: 401 })),
+      readLiveSession(SECRET, () => Promise.resolve(new Response(null, { status: 401 }))),
     ).rejects.toMatchObject({ code: 'UNAUTHORIZED', name: 'LiveSessionPollError' });
   });
 
   it('rejects forbidden the same way as unauthorized', async () => {
     await expect(
-      readLiveSession(SECRET, async () => new Response(null, { status: 403 })),
+      readLiveSession(SECRET, () => Promise.resolve(new Response(null, { status: 403 }))),
     ).rejects.toBeInstanceOf(LiveSessionPollError);
     await expect(
-      readLiveSession(SECRET, async () => new Response(null, { status: 403 })),
+      readLiveSession(SECRET, () => Promise.resolve(new Response(null, { status: 403 }))),
     ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
   });
 
   it('returns null when the display has no live session', async () => {
-    const live = await readLiveSession(
-      SECRET,
-      async () => new Response(JSON.stringify({ session: null }), { status: 200 }),
+    const live = await readLiveSession(SECRET, () =>
+      Promise.resolve(new Response(JSON.stringify({ session: null }), { status: 200 })),
     );
     expect(live).toBeNull();
   });
 
   it('treats HTTP 5xx as a transient poll error, not an empty session', async () => {
     await expect(
-      readLiveSession(SECRET, async () => new Response('boom', { status: 503 })),
+      readLiveSession(SECRET, () => Promise.resolve(new Response('boom', { status: 503 }))),
     ).rejects.toMatchObject({ code: 'TRANSIENT', name: 'LiveSessionPollError' });
   });
 
   it('treats network failure as a transient poll error', async () => {
     await expect(
-      readLiveSession(SECRET, async () => {
-        throw new TypeError('Failed to fetch');
-      }),
+      readLiveSession(SECRET, () => Promise.reject(new TypeError('Failed to fetch'))),
     ).rejects.toMatchObject({ code: 'TRANSIENT' });
   });
 
   it('does not map 5xx onto SESSION_ENDED through eventFromLiveSession', async () => {
     await expect(
-      readLiveSession(SECRET, async () => new Response(null, { status: 500 })),
+      readLiveSession(SECRET, () => Promise.resolve(new Response(null, { status: 500 }))),
     ).rejects.toThrow(LiveSessionPollError);
     // Only an explicit empty read (null) ends; errors never reach event mapping.
     expect(eventFromLiveSession(null, SESSION_ID, Date.now())).toBe('SESSION_ENDED');
   });
 
   it('reads a selected garment without trusting org or shop from the phone', async () => {
-    const live = await readLiveSession(SECRET, async () => {
-      return new Response(
-        JSON.stringify({
-          session: {
-            session_id: SESSION_ID,
-            status: 'ACTIVE',
-            pairing_expires_at: null,
-            selected_garment: {
-              garment_id: '33333333-3333-4333-8333-333333333333',
-              variant_id: '55555555-5555-4555-8555-555555555555',
-              category: 'Tops',
+    const live = await readLiveSession(SECRET, () => {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            session: {
+              session_id: SESSION_ID,
+              status: 'ACTIVE',
+              pairing_expires_at: null,
+              selected_garment: {
+                garment_id: '33333333-3333-4333-8333-333333333333',
+                variant_id: '55555555-5555-4555-8555-555555555555',
+                category: 'Tops',
+              },
             },
-          },
-        }),
-        { status: 200 },
+          }),
+          { status: 200 },
+        ),
       );
     });
     expect(live?.selectedGarment).toEqual({
@@ -209,39 +215,43 @@ describe('live session read', () => {
   });
 
   it('reads is_test_fixture from the live session garment', async () => {
-    const live = await readLiveSession(SECRET, async () => {
-      return new Response(
-        JSON.stringify({
-          session: {
-            session_id: SESSION_ID,
-            status: 'ACTIVE',
-            pairing_expires_at: null,
-            selected_garment: {
-              garment_id: '33333333-3333-4333-8333-333333333333',
-              variant_id: '55555555-5555-4555-8555-555555555555',
-              category: 'Tops',
-              is_test_fixture: true,
+    const live = await readLiveSession(SECRET, () => {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            session: {
+              session_id: SESSION_ID,
+              status: 'ACTIVE',
+              pairing_expires_at: null,
+              selected_garment: {
+                garment_id: '33333333-3333-4333-8333-333333333333',
+                variant_id: '55555555-5555-4555-8555-555555555555',
+                category: 'Tops',
+                is_test_fixture: true,
+              },
             },
-          },
-        }),
-        { status: 200 },
+          }),
+          { status: 200 },
+        ),
       );
     });
     expect(live?.selectedGarment?.isTestFixture).toBe(true);
   });
 
   it('treats a cleared garment as no selection', async () => {
-    const live = await readLiveSession(SECRET, async () => {
-      return new Response(
-        JSON.stringify({
-          session: {
-            session_id: SESSION_ID,
-            status: 'ACTIVE',
-            pairing_expires_at: null,
-            selected_garment: null,
-          },
-        }),
-        { status: 200 },
+    const live = await readLiveSession(SECRET, () => {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            session: {
+              session_id: SESSION_ID,
+              status: 'ACTIVE',
+              pairing_expires_at: null,
+              selected_garment: null,
+            },
+          }),
+          { status: 200 },
+        ),
       );
     });
     expect(live?.selectedGarment).toBeNull();
@@ -272,10 +282,12 @@ describe('end / reset', () => {
   it('calls the existing end route and returns to idle', async () => {
     let url = '';
     let body: unknown;
-    await endKioskSession(SECRET, SESSION_ID, 'CUSTOMER_ENDED', async (input, init) => {
-      url = String(input);
-      body = JSON.parse(String(init?.body));
-      return new Response(JSON.stringify({ already_ended: false }), { status: 200 });
+    await endKioskSession(SECRET, SESSION_ID, 'CUSTOMER_ENDED', (input, init) => {
+      url = requestUrl(input);
+      body = JSON.parse(bodyText(init?.body));
+      return Promise.resolve(
+        new Response(JSON.stringify({ already_ended: false }), { status: 200 }),
+      );
     });
     expect(url).toBe('/api/session/end');
     expect(body).toEqual({ session_id: SESSION_ID, reason: 'CUSTOMER_ENDED' });
@@ -378,7 +390,7 @@ describe('transient poll errors preserve ACTIVE session state', () => {
       status,
       pairingUrl: PAIRING_URL,
       selected: GARMENT,
-      fetchFn: async () => new Response('unavailable', { status: 503 }),
+      fetchFn: () => Promise.resolve(new Response('unavailable', { status: 503 })),
     });
 
     expect(after.status).toBe('ACTIVE');
@@ -403,9 +415,7 @@ describe('transient poll errors preserve ACTIVE session state', () => {
       status,
       pairingUrl: PAIRING_URL,
       selected: GARMENT,
-      fetchFn: async () => {
-        throw new TypeError('Failed to fetch');
-      },
+      fetchFn: () => Promise.reject(new TypeError('Failed to fetch')),
     });
 
     expect(after.status).toBe('ACTIVE');
@@ -426,7 +436,8 @@ describe('transient poll errors preserve ACTIVE session state', () => {
       status,
       pairingUrl: null,
       selected: GARMENT,
-      fetchFn: async () => new Response(JSON.stringify({ session: null }), { status: 200 }),
+      fetchFn: () =>
+        Promise.resolve(new Response(JSON.stringify({ session: null }), { status: 200 })),
     });
 
     expect(after.status).toBe('ENDED');
@@ -457,7 +468,7 @@ describe('transient poll errors preserve ACTIVE session state', () => {
 
     let resilience = notePollSuccess(createPollResilienceState(), Date.now());
     try {
-      await readLiveSession(SECRET, async () => new Response(null, { status: 500 }));
+      await readLiveSession(SECRET, () => Promise.resolve(new Response(null, { status: 500 })));
     } catch {
       if (life.getGeneration() === stale.generation) {
         resilience = notePollFailure(resilience, Date.now());
@@ -470,13 +481,15 @@ describe('transient poll errors preserve ACTIVE session state', () => {
 
 describe('enroll does not invent a credential', () => {
   it('persists only what the enroll route returned', async () => {
-    const enrolled = await enrollDevice('ABCD1234EFGH', async () => {
-      return new Response(
-        JSON.stringify({
-          device_secret: SECRET,
-          display: { id: DISPLAY_ID, name: 'Front', slug: 'front', shop_id: DISPLAY_ID },
-        }),
-        { status: 200 },
+    const enrolled = await enrollDevice('ABCD1234EFGH', () => {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            device_secret: SECRET,
+            display: { id: DISPLAY_ID, name: 'Front', slug: 'front', shop_id: DISPLAY_ID },
+          }),
+          { status: 200 },
+        ),
       );
     });
     expect(enrolled.deviceSecret).toBe(SECRET);

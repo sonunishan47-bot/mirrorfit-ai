@@ -46,11 +46,12 @@ function createFakeVideo(
     videoWidth: 0,
     videoHeight: 0,
     ready: false,
-    async play() {
+    play() {
       this.videoWidth = width;
       this.videoHeight = height;
       this.ready = true;
       for (const listener of [...listeners]) listener();
+      return Promise.resolve();
     },
     addEventListener(_type: 'loadedmetadata', listener: () => void) {
       listeners.add(listener);
@@ -243,8 +244,8 @@ describe('waitUntilPlayable edge cases', () => {
       playsInline: false,
       videoWidth: 640,
       videoHeight: 480,
-      async play() {
-        throw new Error('play rejected');
+      play() {
+        return Promise.reject(new Error('play rejected'));
       },
       addEventListener(_type: 'loadedmetadata', listener: () => void) {
         listeners.add(listener);
@@ -272,7 +273,7 @@ describe('waitUntilPlayable edge cases', () => {
       playsInline: false,
       videoWidth: 0,
       videoHeight: 0,
-      async play() {
+      play() {
         return new Promise(() => {
           /* never settles */
         });

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { bodyText } from '@/lib/fetch-text';
+
 import { startHeartbeatLoop } from './heartbeat-loop';
 
 const SECRET = 'b'.repeat(43);
@@ -11,9 +13,9 @@ describe('heartbeat loop', () => {
       getSecret: () => SECRET,
       getSample: () => ({ camera_ok: true, render_fps: null }),
       intervalMs: 60_000,
-      fetchFn: async (_url, init) => {
-        body = JSON.parse(String(init?.body));
-        return new Response(JSON.stringify({ status: 'ok' }), { status: 200 });
+      fetchFn: (_url, init) => {
+        body = JSON.parse(bodyText(init?.body));
+        return Promise.resolve(new Response(JSON.stringify({ status: 'ok' }), { status: 200 }));
       },
     });
 
@@ -33,9 +35,9 @@ describe('heartbeat loop', () => {
       getSecret: () => SECRET,
       getSample: () => ({ camera_ok: true, render_fps: 59.5 }),
       intervalMs: 60_000,
-      fetchFn: async (_url, init) => {
-        body = JSON.parse(String(init?.body)) as { render_fps?: number | null };
-        return new Response(JSON.stringify({ status: 'ok' }), { status: 200 });
+      fetchFn: (_url, init) => {
+        body = JSON.parse(bodyText(init?.body)) as { render_fps?: number | null };
+        return Promise.resolve(new Response(JSON.stringify({ status: 'ok' }), { status: 200 }));
       },
     });
 
@@ -51,9 +53,9 @@ describe('heartbeat loop', () => {
       getSecret: () => SECRET,
       getSample: () => ({ camera_ok: true, render_fps: null }),
       intervalMs: 60_000,
-      fetchFn: async () => {
+      fetchFn: () => {
         calls += 1;
-        return new Response(JSON.stringify({ status: 'ok' }), { status: 200 });
+        return Promise.resolve(new Response(JSON.stringify({ status: 'ok' }), { status: 200 }));
       },
     });
 
@@ -68,9 +70,9 @@ describe('heartbeat loop', () => {
       getSecret: () => null,
       getSample: () => ({ camera_ok: false, render_fps: null }),
       intervalMs: 60_000,
-      fetchFn: async () => {
+      fetchFn: () => {
         calls += 1;
-        return new Response('no', { status: 500 });
+        return Promise.resolve(new Response('no', { status: 500 }));
       },
     });
 
@@ -84,9 +86,7 @@ describe('heartbeat loop', () => {
       getSecret: () => SECRET,
       getSample: () => ({ camera_ok: false, render_fps: null }),
       intervalMs: 60_000,
-      fetchFn: async () => {
-        throw new Error('network down');
-      },
+      fetchFn: () => Promise.reject(new Error('network down')),
     });
 
     await expect(loop.tick()).resolves.toBeUndefined();
@@ -99,9 +99,9 @@ describe('heartbeat loop', () => {
       getSecret: () => SECRET,
       getSample: () => ({ camera_ok: true, render_fps: 30 }),
       intervalMs: 60_000,
-      fetchFn: async (_url, init) => {
-        body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-        return new Response(JSON.stringify({ status: 'ok' }), { status: 200 });
+      fetchFn: (_url, init) => {
+        body = JSON.parse(bodyText(init?.body)) as Record<string, unknown>;
+        return Promise.resolve(new Response(JSON.stringify({ status: 'ok' }), { status: 200 }));
       },
     });
 
@@ -122,9 +122,9 @@ describe('heartbeat loop', () => {
         metrics: { try_on_selections: 2, category_top: 1 },
       }),
       intervalMs: 60_000,
-      fetchFn: async (_url, init) => {
-        body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-        return new Response(JSON.stringify({ status: 'ok' }), { status: 200 });
+      fetchFn: (_url, init) => {
+        body = JSON.parse(bodyText(init?.body)) as Record<string, unknown>;
+        return Promise.resolve(new Response(JSON.stringify({ status: 'ok' }), { status: 200 }));
       },
     });
 
@@ -144,7 +144,8 @@ describe('heartbeat loop', () => {
       onUnauthorized: () => {
         unauthorized = true;
       },
-      fetchFn: async () => new Response(JSON.stringify({ error: 'UNAUTHORIZED' }), { status: 401 }),
+      fetchFn: () =>
+        Promise.resolve(new Response(JSON.stringify({ error: 'UNAUTHORIZED' }), { status: 401 })),
     });
 
     await loop.tick();

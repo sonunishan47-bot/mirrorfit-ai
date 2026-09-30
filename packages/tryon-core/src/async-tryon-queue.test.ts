@@ -43,9 +43,9 @@ describe('AsyncTryOnQueue', () => {
     });
     // Allow first to become in-flight before superseding.
     await new Promise((r) => setTimeout(r, 5));
-    const second = queue.enqueue(async () => {
+    const second = queue.enqueue(() => {
       started += 1;
-      return 'b';
+      return Promise.resolve('b');
     });
     const [firstResult, secondResult] = await Promise.all([first, second]);
     expect(firstResult).toBeNull();

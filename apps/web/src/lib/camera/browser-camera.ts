@@ -108,15 +108,9 @@ function stopStream(stream: MediaStream | null): void {
 }
 
 function errorName(error: unknown): string {
-  if (
-    error &&
-    typeof error === 'object' &&
-    'name' in error &&
-    typeof (error as { name: unknown }).name === 'string'
-  ) {
-    return (error as { name: string }).name;
-  }
-  return '';
+  if (typeof error !== 'object' || error === null || !('name' in error)) return '';
+  const name = error.name;
+  return typeof name === 'string' ? name : '';
 }
 
 function isBusyDeviceError(error: unknown): boolean {
@@ -286,7 +280,7 @@ export class BrowserCameraProvider implements CameraProvider {
     throw lastError instanceof Error ? lastError : new Error(this.#lastError);
   }
 
-  async stop(): Promise<void> {
+  stop(): Promise<void> {
     this.#generation += 1;
     const stream = this.#stream;
     const video = this.#video;
@@ -297,6 +291,7 @@ export class BrowserCameraProvider implements CameraProvider {
       video.srcObject = null;
     }
     stopStream(stream);
+    return Promise.resolve();
   }
 
   /**

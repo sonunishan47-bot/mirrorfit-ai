@@ -37,17 +37,19 @@ describe('loadOverlayBitmap with content_hash', () => {
     expect(expected).toBeTruthy();
     const blob = new Blob([bytes], { type: 'image/png' });
     const loaded = await loadOverlayBitmap('https://cdn.example/ok.png', {
-      fetchFn: (async () =>
-        new Response(blob, {
-          status: 200,
-          headers: { 'content-type': 'image/png' },
-        })) as unknown as typeof fetch,
-      createImageBitmapFn: (async () =>
-        ({
+      fetchFn: (() =>
+        Promise.resolve(
+          new Response(blob, {
+            status: 200,
+            headers: { 'content-type': 'image/png' },
+          }),
+        )) as unknown as typeof fetch,
+      createImageBitmapFn: (() =>
+        Promise.resolve({
           width: 10,
           height: 20,
           close: vi.fn(),
-        }) as unknown as ImageBitmap) as unknown as typeof createImageBitmap,
+        })) as unknown as typeof createImageBitmap,
       expectedContentHash: expected!,
       digestFn: nodeDigest,
     });
@@ -56,15 +58,17 @@ describe('loadOverlayBitmap with content_hash', () => {
 
   it('returns null when the hash does not match — never draws tampered bytes', async () => {
     const blob = new Blob([new Uint8Array([9, 9, 9])], { type: 'image/png' });
-    const createImageBitmapFn = vi.fn(async () => {
-      return { width: 10, height: 10, close: vi.fn() } as unknown as ImageBitmap;
+    const createImageBitmapFn = vi.fn(() => {
+      return Promise.resolve({ width: 10, height: 10, close: vi.fn() });
     });
     const loaded = await loadOverlayBitmap('https://cdn.example/bad.png', {
-      fetchFn: (async () =>
-        new Response(blob, {
-          status: 200,
-          headers: { 'content-type': 'image/png' },
-        })) as unknown as typeof fetch,
+      fetchFn: (() =>
+        Promise.resolve(
+          new Response(blob, {
+            status: 200,
+            headers: { 'content-type': 'image/png' },
+          }),
+        )) as unknown as typeof fetch,
       createImageBitmapFn: createImageBitmapFn as unknown as typeof createImageBitmap,
       expectedContentHash: 'a'.repeat(64),
       digestFn: nodeDigest,

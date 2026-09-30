@@ -10,7 +10,7 @@ import {
 
 describe('createRateLimiter', () => {
   it('allows up to limit hits inside the window then rejects', () => {
-    let now = 1_000;
+    const now = 1_000;
     const limiter = createRateLimiter({
       limit: 3,
       windowMs: 1_000,

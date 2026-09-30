@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { cn } from '@mirrorfit/ui';
 import {
@@ -34,6 +34,15 @@ type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
 type LoadStatus = 'loading' | 'ready' | 'empty' | 'error';
 type ShareStatus = 'idle' | 'sharing' | 'shared' | 'copied' | 'error';
 
+function subscribeOnline(onChange: () => void): () => void {
+  window.addEventListener('online', onChange);
+  window.addEventListener('offline', onChange);
+  return () => {
+    window.removeEventListener('online', onChange);
+    window.removeEventListener('offline', onChange);
+  };
+}
+
 /**
  * Phone catalog after Mirror Ready.
  *
@@ -50,8 +59,20 @@ export function SessionCatalog({ readToken }: { readToken: () => string | null }
   const [selectedGarmentId, setSelectedGarmentId] = useState<string | null>(null);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
-  const [offline, setOffline] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const online = useSyncExternalStore(
+    subscribeOnline,
+    () => navigator.onLine,
+    () => true,
+  );
+  const offline = !online;
+  const [sawOffline, setSawOffline] = useState(false);
+  if (!online && !sawOffline) {
+    setSawOffline(true);
+  } else if (online && sawOffline) {
+    setSawOffline(false);
+    setReloadKey((key) => key + 1);
+  }
   const [expandedGarmentId, setExpandedGarmentId] = useState<string | null>(null);
   const [shareStatus, setShareStatus] = useState<ShareStatus>('idle');
   const [shareMessage, setShareMessage] = useState<string | null>(null);
@@ -60,6 +81,7 @@ export function SessionCatalog({ readToken }: { readToken: () => string | null }
   const guardRef = useRef(new CatalogSelectionGuard());
 
   useEffect(() => {
+    const guard = guardRef.current;
     let cancelled = false;
     const slowTimer = window.setTimeout(() => {
       if (!cancelled) setLoadSlow(true);
@@ -105,27 +127,9 @@ export function SessionCatalog({ readToken }: { readToken: () => string | null }
     return () => {
       cancelled = true;
       window.clearTimeout(slowTimer);
-      guardRef.current.invalidate();
+      guard.invalidate();
     };
   }, [readToken, reloadKey]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const syncOnline = () => {
-      const nextOffline = !navigator.onLine;
-      setOffline(nextOffline);
-      if (!nextOffline) {
-        setReloadKey((k) => k + 1);
-      }
-    };
-    setOffline(!navigator.onLine);
-    window.addEventListener('online', syncOnline);
-    window.addEventListener('offline', syncOnline);
-    return () => {
-      window.removeEventListener('online', syncOnline);
-      window.removeEventListener('offline', syncOnline);
-    };
-  }, []);
 
   const filtered = useMemo(() => (items ? filterCatalogItems(items, filter) : []), [items, filter]);
   const groups = useMemo(() => groupCatalogByGarment(filtered), [filtered]);
@@ -135,7 +139,6 @@ export function SessionCatalog({ readToken }: { readToken: () => string | null }
       const token = readToken();
       if (!token) return;
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        setOffline(true);
         setSyncStatus('error');
         return;
       }
