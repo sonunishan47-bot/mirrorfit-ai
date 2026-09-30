@@ -110,6 +110,13 @@ describe('VTON provider boundary', () => {
       WORKER_ENDPOINT_URL: 'http://127.0.0.1:8000/infer',
       MODEL_NAME: 'catvton',
     };
+    expect(preflightStill(job, { ...env, MODEL_NAME: 'fashn' })).toEqual({ ok: true });
+    expect(modelInfo({ MODEL_NAME: 'fashn' }).commercialUse).toBe(true);
+    expect(vtonCapabilities({ MODEL_NAME: 'fashn' }).fitCategories).toEqual([
+      'TOP',
+      'LOWER_BODY',
+      'FULL_BODY',
+    ]);
     expect(modelInfo(env).commercialUse).toBe(false);
     expect(preflightStill(job, env)).toEqual({ ok: false, error: 'MODEL_LICENSE_BLOCKED' });
     expect(

@@ -52,7 +52,19 @@ Checked against project licenses in September 2026. These are capability gates o
 | `ootdiffusion` | top, full | no | blocked, CC BY-NC-SA 4.0 |
 | `catv2ton` | top, lower, full | yes | blocked, CC BY-NC-SA 4.0 |
 | `qwen-image-2.1` | top, lower, full | no | blocked, research license |
+| `fashn` | top, lower, full | no | allowed, Apache-2.0 stills |
 
 An unknown `MODEL_NAME` is treated as your own private server: all three fit families, still mode, license unknown. Full-body garments (churidar, dress, abaya, kurta, thobe) are not warped in 2D. If the selected profile does not list that family, the job fails `CATEGORY_UNSUPPORTED`.
 
-RTX 4090 24GB is the practical still-image card for this class of model. Do not publish a GPU port. Swap RunPod for your own machine by changing `WORKER_ENDPOINT_URL` only.
+RTX 4090 24GB is the practical still-image card for this class of model. FASHN VTON v1.5 also runs on a 16GB card. Do not publish a GPU port. Swap RunPod for your own machine by changing `WORKER_ENDPOINT_URL` only.
+
+Shop still server (no weights in git):
+
+```bash
+cd services/still-vton
+pip install pillow
+# then install fashn-vton and download model.safetensors into ./weights
+FASHN_WEIGHTS_DIR=./weights python server.py
+```
+
+Set `MODEL_NAME=fashn` and `WORKER_ENDPOINT_URL=http://127.0.0.1:8090/infer` on the Node worker. The server binds to localhost. It copies the captured face back onto the result and, when the shop wall can be separated, places the person on a plain studio gradient. If the weights are missing it returns 503 and no JPEG.

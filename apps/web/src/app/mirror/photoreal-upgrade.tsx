@@ -83,6 +83,8 @@ export function PhotorealUpgrade({
       .enqueue(async (token) => {
         const deadline = Date.now() + 8_000;
         let jpeg: Uint8Array | null = null;
+        await delay(3_000, token.signal);
+        if (token.cancelled) return null;
         while (!token.cancelled && Date.now() < deadline) {
           const live = liveRef.current;
           const currentSession = live.getSessionId();
@@ -142,7 +144,14 @@ export function PhotorealUpgrade({
         if (value === 'NOT_CONNECTED') {
           setNote({
             scope: noteScope,
-            text: 'Realistic model is not connected. The live overlay stays.',
+            text: 'Realistic model is not connected. The live overlay stays. No photo is invented.',
+          });
+          return;
+        }
+        if (value === 'FAILED') {
+          setNote({
+            scope: noteScope,
+            text: 'The realistic still did not return. The live overlay stays.',
           });
           return;
         }
@@ -202,8 +211,9 @@ export function PhotorealUpgrade({
         {choice === 'pending' ? (
           <>
             <p>
-              Optional realistic try-on uploads one still photo of you. It is deleted when the
-              session ends. The live overlay does not wait for it.
+              One still photo, not a live video. Hold still for three seconds. Your face is kept
+              from that photo. The shop background can be replaced by a plain studio plate. The
+              result appears only if the local model returns it.
             </p>
             <div className="flex justify-center gap-4">
               <button
@@ -214,7 +224,7 @@ export function PhotorealUpgrade({
                   setConsent({ sessionId, choice: 'granted' });
                   setNote({
                     scope,
-                    text: 'Waiting for one realistic try-on. The live overlay stays.',
+                    text: 'Hold still. One photo, then the live overlay stays until a real result returns.',
                   });
                 }}
               >

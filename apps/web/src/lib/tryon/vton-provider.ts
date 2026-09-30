@@ -67,14 +67,15 @@ interface ModelProfile {
   readonly provider: string;
   readonly fitCategories: readonly VtonFitCategory[];
   readonly videoCapable: boolean;
-  readonly commercialUse: false;
+  readonly commercialUse: boolean;
 }
 
 /**
  * Profiles are capability gates, not downloads. Weights are not in this repo.
  * Licenses checked September 2026: CatVTON and CatV2TON are CC BY-NC-SA 4.0,
  * IDM-VTON is CC BY-NC-SA 4.0, OOTDiffusion is CC BY-NC-SA 4.0, Qwen-Image-2.1
- * is research-only. None of them are enabled for a shop by default.
+ * is research-only. FASHN VTON v1.5 is Apache-2.0 and is the shop still model.
+ * None of the non-commercial checkpoints are enabled for a shop by default.
  */
 const MODEL_PROFILES: Readonly<Record<string, ModelProfile>> = {
   catvton: {
@@ -106,6 +107,12 @@ const MODEL_PROFILES: Readonly<Record<string, ModelProfile>> = {
     fitCategories: ['TOP', 'LOWER_BODY', 'FULL_BODY'],
     videoCapable: false,
     commercialUse: false,
+  },
+  fashn: {
+    provider: 'fashn',
+    fitCategories: ['TOP', 'LOWER_BODY', 'FULL_BODY'],
+    videoCapable: false,
+    commercialUse: true,
   },
 };
 

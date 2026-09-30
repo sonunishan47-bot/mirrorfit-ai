@@ -106,7 +106,7 @@ Targets, measured rather than asserted:
 
 - **Shirt and pants:** live pose warp of an overlay on the mirror. Not a photograph.
 - **Dress, abaya, kurta, churidar, thobe:** recognised. A pose silhouette tracks the shoulders to the hem. It is not the shirt warp and not a photograph. An uploaded overlay image, if the shop has one, is placed on that same hem.
-- **Photorealistic still:** the mirror asks for consent, then `POST /api/device/tryon-jobs` stores one JPEG. The worker claims `/api/worker/tryon-jobs/claim` and completes `/api/worker/tryon-jobs/complete`. Point it at `WORKER_ENDPOINT_URL`. `RUNPOD_ENDPOINT_URL` is only a legacy alias for that same URL. If the URL is unset the job fails `VTON_NOT_CONNECTED`. The app does not draw a fake result.
+- **Photorealistic still:** the mirror asks for consent, holds for three seconds, then `POST /api/device/tryon-jobs` stores one JPEG. The worker claims `/api/worker/tryon-jobs/claim` and completes `/api/worker/tryon-jobs/complete`. The shop model is FASHN (`MODEL_NAME=fashn`, `services/still-vton`). It keeps the captured face and can place a plain studio plate behind the person. Point it at `WORKER_ENDPOINT_URL`. `RUNPOD_ENDPOINT_URL` is only a legacy alias for that same URL. If the URL or the weights are unset the job fails and the live overlay stays. The app does not draw a fake result. It is not a live video.
 - **Catalog:** staff add garments at `/catalog` after signing in. The seed script is only for the labelled trial shirt and pants.
 
 ## Roadmap
