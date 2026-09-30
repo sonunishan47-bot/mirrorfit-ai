@@ -28,16 +28,18 @@ export function parseGarmentAssetRef(input: unknown): GarmentAssetRef | null {
   const row = input as Record<string, unknown>;
   if (typeof row['garmentId'] !== 'string' || row['garmentId'].length === 0) return null;
   if (!GARMENT_ASSET_KINDS.includes(row['kind'] as GarmentAssetKind)) return null;
-  if (typeof row['version'] !== 'number' || !Number.isInteger(row['version']) || row['version'] < 1) {
+  if (
+    typeof row['version'] !== 'number' ||
+    !Number.isInteger(row['version']) ||
+    row['version'] < 1
+  ) {
     return null;
   }
   const width = typeof row['width'] === 'number' && row['width'] > 0 ? row['width'] : null;
   const height = typeof row['height'] === 'number' && row['height'] > 0 ? row['height'] : null;
   const variantId = typeof row['variantId'] === 'string' ? row['variantId'] : null;
   const anchor =
-    row['anchor'] && typeof row['anchor'] === 'object'
-      ? parseAnchor(row['anchor'])
-      : null;
+    row['anchor'] && typeof row['anchor'] === 'object' ? parseAnchor(row['anchor']) : null;
   if (row['anchor'] && !anchor) return null;
 
   return {
@@ -64,7 +66,11 @@ function parseAnchor(input: unknown): { x: number; y: number } | null {
 export const OVERLAY_MIME_TYPES = ['image/png', 'image/webp'] as const;
 
 export type GarmentAssetValidation =
-  | { readonly ok: true; readonly kind: 'REAL_PRODUCT_ASSET' | 'TEST_FIXTURE_ASSET'; readonly ref: GarmentAssetRef }
+  | {
+      readonly ok: true;
+      readonly kind: 'REAL_PRODUCT_ASSET' | 'TEST_FIXTURE_ASSET';
+      readonly ref: GarmentAssetRef;
+    }
   | { readonly ok: false; readonly reason: string };
 
 /**
@@ -87,7 +93,10 @@ export function validateGarmentAssetMetadata(input: unknown): GarmentAssetValida
   const row = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
   const mime = row['mimeType'];
   if (mime !== undefined) {
-    if (typeof mime !== 'string' || !OVERLAY_MIME_TYPES.includes(mime as (typeof OVERLAY_MIME_TYPES)[number])) {
+    if (
+      typeof mime !== 'string' ||
+      !OVERLAY_MIME_TYPES.includes(mime as (typeof OVERLAY_MIME_TYPES)[number])
+    ) {
       return { ok: false, reason: 'UNSUPPORTED_MIME_TYPE' };
     }
   }

@@ -27,8 +27,7 @@ export class ClientErrorBoundary extends Component<
     readonly hasError: boolean;
     readonly message: string | null;
   } {
-    const message =
-      error instanceof Error ? error.message.slice(0, 160) : 'Something went wrong.';
+    const message = error instanceof Error ? error.message.slice(0, 160) : 'Something went wrong.';
     return { hasError: true, message };
   }
 
@@ -54,9 +53,7 @@ export class ClientErrorBoundary extends Component<
           {this.props.body ??
             'This panel hit an unexpected error. The rest of the session can continue.'}
         </p>
-        {this.state.message ? (
-          <p className="text-xs text-muted">{this.state.message}</p>
-        ) : null}
+        {this.state.message ? <p className="text-xs text-muted">{this.state.message}</p> : null}
         <button
           type="button"
           className="text-xs uppercase tracking-[0.25em] text-muted underline-offset-4 hover:text-secondary hover:underline"

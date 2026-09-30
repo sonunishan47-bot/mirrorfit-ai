@@ -26,7 +26,7 @@ function garment(id: string, org: string, shop: string, name: string) {
 }
 
 describe('catalog tenant isolation', () => {
-  it('keeps only the calling shop\'s active garments', () => {
+  it("keeps only the calling shop's active garments", () => {
     const items = filterCatalogForShop(
       [
         garment(GARMENT_A, ORG_A, SHOP_A, 'Shop A tee'),

@@ -61,10 +61,7 @@ export function expireStaleSessionsInMemory(
 }
 
 /** Claim gate: only WAITING + unexpired pairing window (mirrors SQL). */
-export function canClaimPairingSession(
-  row: ExpirableSessionRow,
-  nowMs: number,
-): boolean {
+export function canClaimPairingSession(row: ExpirableSessionRow, nowMs: number): boolean {
   if (row.status !== 'WAITING') return false;
   if (!row.pairingExpiresAt) return false;
   const expires = Date.parse(row.pairingExpiresAt);

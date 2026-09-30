@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  HAVE_CURRENT_DATA,
-  resolveCameraPresence,
-  videoHasLiveFeed,
-} from './camera-presence';
+import { HAVE_CURRENT_DATA, resolveCameraPresence, videoHasLiveFeed } from './camera-presence';
 
 describe('videoHasLiveFeed', () => {
   it('is false without a stream or dimensions', () => {

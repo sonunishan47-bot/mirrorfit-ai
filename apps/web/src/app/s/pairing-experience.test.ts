@@ -94,7 +94,11 @@ describe('customer /s pairing experience', () => {
 
     expect(await screen.findByText('Mirror Ready')).toBeTruthy();
     expect(screen.getByText('You can now use the mirror.')).toBeTruthy();
-    expect(await screen.findByText('No garments are available for this shop yet. Nothing is invented here.')).toBeTruthy();
+    expect(
+      await screen.findByText(
+        'No garments are available for this shop yet. Nothing is invented here.',
+      ),
+    ).toBeTruthy();
     expect(pageText()).not.toContain(TOKEN);
   });
 

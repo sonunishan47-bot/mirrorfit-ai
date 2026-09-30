@@ -296,7 +296,6 @@ describe('waitUntilPlayable edge cases', () => {
   });
 });
 
-
 describe('constraint fallbacks and busy retry', () => {
   it('falls back to softer constraints when preferred getUserMedia fails', async () => {
     const track = createFakeTrack();
@@ -305,7 +304,9 @@ describe('constraint fallbacks and busy retry', () => {
       getUserMedia: (constraints) => {
         calls.push(constraints);
         if (calls.length === 1) {
-          return Promise.reject(Object.assign(new Error('overconstrained'), { name: 'OverconstrainedError' }));
+          return Promise.reject(
+            Object.assign(new Error('overconstrained'), { name: 'OverconstrainedError' }),
+          );
         }
         return Promise.resolve(createFakeStream([track]));
       },
@@ -368,7 +369,9 @@ describe('describeCameraStartError', () => {
   it('explains missing secure context', () => {
     expect(
       describeCameraStartError(
-        Object.assign(new Error('Camera requires a secure HTTPS origin'), { name: 'SecurityError' }),
+        Object.assign(new Error('Camera requires a secure HTTPS origin'), {
+          name: 'SecurityError',
+        }),
       ),
     ).toMatch(/HTTPS/i);
   });

@@ -28,7 +28,9 @@ if (regenerated) {
 }
 console.log(`Open the physical mirror at https://${lan}:${PORT}/mirror`);
 console.log('Trust the local CA once (Windows): pnpm.cmd --filter @mirrorfit/web trust-dev-ca');
-console.log(`iPhone CA install (HTTP, before Safari trusts HTTPS): http://${lan}:${DEV_CA_HTTP_PORT}/dev-ca`);
+console.log(
+  `iPhone CA install (HTTP, before Safari trusts HTTPS): http://${lan}:${DEV_CA_HTTP_PORT}/dev-ca`,
+);
 console.log(
   'Stuck Turbopack / dead :3111 after OneDrive sync: pnpm.cmd --filter @mirrorfit/web kiosk-recover',
 );

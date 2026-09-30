@@ -219,11 +219,7 @@ export class BrowserCameraProvider implements CameraProvider {
     const generation = ++this.#generation;
     this.#lastError = null;
 
-    const levels: Array<'preferred' | 'reduced' | 'minimal'> = [
-      'preferred',
-      'reduced',
-      'minimal',
-    ];
+    const levels: Array<'preferred' | 'reduced' | 'minimal'> = ['preferred', 'reduced', 'minimal'];
 
     let lastError: unknown = new Error('Camera failed to start');
 

@@ -8,6 +8,11 @@ import { ClientErrorBoundary } from '@/components/client-error-boundary';
 import { MannequinDock } from '@/components/mirror/mannequin-dock';
 import { BrowserCameraProvider, describeCameraStartError } from '@/lib/camera/browser-camera';
 import { resolveCameraPresence } from '@/lib/camera/camera-presence';
+import {
+  TRIAL_PANTS_OVERLAY,
+  TRIAL_SHIRT_OVERLAY,
+  type TrialOverlaySelection,
+} from '@/lib/catalog/trial-overlay';
 import { startHeartbeatLoop } from '@/lib/device/heartbeat-loop';
 import {
   clearDeviceCredential,
@@ -106,11 +111,16 @@ export function KioskShell() {
     id: number;
     command: 'next-view' | 'next-size';
   } | null>(null);
+  const [physicalTrial, setPhysicalTrial] = useState<TrialOverlaySelection | null>(null);
 
   const view = presentKiosk(status);
   const qrValue = pairingQrValue(pairingUrl, device?.deviceSecret ?? null);
   const showScreensaver = shouldShowScreensaver(status, powerPhase);
   const tryOnActive = shouldRunTryOnPipeline(status, powerPhase);
+  const customerGarment = status === 'ACTIVE' ? selectedGarment : null;
+  const usingTrial = customerGarment === null && physicalTrial !== null && powerPhase === 'awake';
+  const showTryOn = Boolean(overlayRoot && (tryOnActive || usingTrial));
+  const overlayGarment = customerGarment ?? (usingTrial ? physicalTrial : null);
   const cameraPresence = resolveCameraPresence({
     flag: camera,
     video: videoRef.current,
@@ -595,7 +605,7 @@ export function KioskShell() {
                 </p>
               ) : null}
 
-              {status === 'ACTIVE' && overlayRoot ? (
+              {showTryOn && overlayRoot ? (
                 <ClientErrorBoundary
                   title="Try-on panel"
                   body="Pose rendering hit an error. Camera preview continues; tap try again to reload fitting."
@@ -604,13 +614,20 @@ export function KioskShell() {
                   }}
                 >
                   <TryOnPanel
-                    active={tryOnActive}
+                    active={tryOnActive || usingTrial}
                     overlayRoot={overlayRoot}
                     getFrame={() => cameraRef.current?.readFrame() ?? null}
-                    getSessionId={() => lifecycleRef.current.getSessionId()}
-                    selectedGarment={selectedGarment}
-                    selectedCategory={selectedGarment?.category ?? null}
-                    selectedIsTestFixture={selectedGarment?.isTestFixture === true}
+                    getSessionId={() => (usingTrial ? null : lifecycleRef.current.getSessionId())}
+                    selectedGarment={
+                      overlayGarment
+                        ? {
+                            garmentId: overlayGarment.garmentId,
+                            variantId: overlayGarment.variantId,
+                          }
+                        : null
+                    }
+                    selectedCategory={overlayGarment?.category ?? null}
+                    selectedIsTestFixture={overlayGarment?.isTestFixture === true}
                     onPresenceChange={(present) => {
                       if (present) {
                         analyticsRef.current.notePersonSeen();
@@ -622,13 +639,50 @@ export function KioskShell() {
                     }}
                   />
                   <MannequinDock
-                    category={selectedGarment?.category ?? null}
-                    colorName={selectedGarment?.colorName ?? null}
-                    sizeLabel={selectedGarment?.sizeLabel ?? null}
+                    category={overlayGarment?.category ?? null}
+                    colorName={overlayGarment?.colorName ?? null}
+                    sizeLabel={overlayGarment?.sizeLabel ?? null}
                     gesture={gesture}
                   />
                 </ClientErrorBoundary>
               ) : null}
+
+              <div
+                className="flex flex-wrap items-center justify-center gap-3"
+                data-testid="physical-trial"
+              >
+                <button
+                  type="button"
+                  disabled={customerGarment !== null}
+                  onClick={() => {
+                    setPhysicalTrial(TRIAL_SHIRT_OVERLAY);
+                    noteActivity(true);
+                  }}
+                  className="rounded-full border border-white/20 px-4 py-2 text-xs uppercase tracking-[0.2em] text-secondary disabled:opacity-40"
+                >
+                  Trial shirt
+                </button>
+                <button
+                  type="button"
+                  disabled={customerGarment !== null}
+                  onClick={() => {
+                    setPhysicalTrial(TRIAL_PANTS_OVERLAY);
+                    noteActivity(true);
+                  }}
+                  className="rounded-full border border-white/20 px-4 py-2 text-xs uppercase tracking-[0.2em] text-secondary disabled:opacity-40"
+                >
+                  Trial pants
+                </button>
+                {physicalTrial && customerGarment === null ? (
+                  <button
+                    type="button"
+                    onClick={() => setPhysicalTrial(null)}
+                    className="text-xs uppercase tracking-[0.2em] text-muted underline-offset-4 hover:underline"
+                  >
+                    Clear trial
+                  </button>
+                ) : null}
+              </div>
 
               {status === 'ACTIVE' || status === 'PAIRED' || status === 'WAITING' ? (
                 <>

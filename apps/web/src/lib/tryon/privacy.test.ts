@@ -17,7 +17,9 @@ describe('Phase 5 privacy invariants', () => {
     expect(combined).not.toMatch(/fetch\(.*frame|uploadFrame|toDataURL|toBlob/i);
     expect(combined).not.toMatch(/SUPABASE_SECRET_KEY|SERVICE_ROLE|sb_secret_/);
     expect(combined).not.toMatch(/NEXT_PUBLIC_SUPABASE_SECRET/);
-    expect(combined).not.toMatch(/console\.(log|debug|info)\(.*landmark|console\.(log|debug|info)\(.*frame/i);
+    expect(combined).not.toMatch(
+      /console\.(log|debug|info)\(.*landmark|console\.(log|debug|info)\(.*frame/i,
+    );
     expect(pose).toContain('detectForVideo');
     expect(pose).toContain('MEDIAPIPE_POSE_MODEL_PATH');
   });

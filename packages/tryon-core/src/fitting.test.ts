@@ -33,8 +33,22 @@ describe('unavailable providers', () => {
     await segmentation.initialize();
     expect(pose.availability).toBe('unavailable');
     expect(segmentation.availability).toBe('unavailable');
-    expect(await pose.processFrame({ timestampMs: 1, width: 2, height: 2, source: {} as CanvasImageSource })).toBeNull();
-    expect(await segmentation.segment({ timestampMs: 1, width: 2, height: 2, source: {} as CanvasImageSource })).toBeNull();
+    expect(
+      await pose.processFrame({
+        timestampMs: 1,
+        width: 2,
+        height: 2,
+        source: {} as CanvasImageSource,
+      }),
+    ).toBeNull();
+    expect(
+      await segmentation.segment({
+        timestampMs: 1,
+        width: 2,
+        height: 2,
+        source: {} as CanvasImageSource,
+      }),
+    ).toBeNull();
     expect(segmentation.readRegions(1).regions.every((region) => region.available === false)).toBe(
       true,
     );
@@ -478,7 +492,7 @@ describe('landmark fitting', () => {
     expect(second!.transform.translate.x).toBeLessThan(jumpedGeo.shoulderCenter.x);
     await engine.dispose();
   });
-it('holds the last good fit across brief weak frames (hysteresis)', async () => {
+  it('holds the last good fit across brief weak frames (hysteresis)', async () => {
     const engine = new LandmarkFittingEngine();
     engine.setAnchorMode('shoulders');
     await engine.loadGarment('g1', 'v1', 'Tops');

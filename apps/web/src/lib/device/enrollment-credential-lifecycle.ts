@@ -31,10 +31,7 @@ export interface EnrollmentCodeRow {
   expiresAt: string;
 }
 
-export type ClaimEnrollmentFailure =
-  | 'invalid_code'
-  | 'display_missing'
-  | 'claim_race';
+export type ClaimEnrollmentFailure = 'invalid_code' | 'display_missing' | 'claim_race';
 
 export type ClaimEnrollmentResult =
   | { readonly ok: true; readonly credentialId: string }
@@ -137,9 +134,6 @@ export function credentialAcceptedByHash(
   return row !== undefined && row.revokedAt === null;
 }
 
-export function activeCredentialCount(
-  store: EnrollmentCredentialStore,
-  displayId: string,
-): number {
+export function activeCredentialCount(store: EnrollmentCredentialStore, displayId: string): number {
   return activeForDisplay(store, displayId).length;
 }

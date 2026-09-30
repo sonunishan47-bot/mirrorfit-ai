@@ -9,10 +9,7 @@ const HEX = '0123456789abcdef';
 
 export type DigestFn = (data: ArrayBuffer) => Promise<ArrayBuffer>;
 
-export async function sha256Hex(
-  data: ArrayBuffer,
-  digestFn?: DigestFn,
-): Promise<string | null> {
+export async function sha256Hex(data: ArrayBuffer, digestFn?: DigestFn): Promise<string | null> {
   if (data.byteLength <= 0) return null;
   const digest = digestFn ?? defaultDigest();
   if (!digest) return null;

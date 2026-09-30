@@ -46,9 +46,7 @@ export function projectCustomerCatalogItem(
 ): ReturnType<typeof customerCatalogItemSchema.parse> | null {
   const parsedGarment = catalogGarmentRowSchema.safeParse(garment);
   const parsedVariant =
-    variant && typeof variant === 'object'
-      ? (variant as CatalogVariantRow)
-      : null;
+    variant && typeof variant === 'object' ? (variant as CatalogVariantRow) : null;
   if (!parsedGarment.success || !parsedVariant) return null;
   if (!parsedGarment.data.is_active || !parsedVariant.is_active) return null;
 

@@ -16,14 +16,9 @@ export const GARMENT_ASSETS_BUCKET = 'garment-assets' as const;
 /** 32 MiB — matches the Storage bucket file_size_limit migration. */
 export const GARMENT_ASSETS_MAX_BYTES = 32 * 1024 * 1024;
 
-export const GARMENT_ASSETS_ALLOWED_MIME_TYPES = [
-  'image/png',
-  'image/webp',
-  'image/jpeg',
-] as const;
+export const GARMENT_ASSETS_ALLOWED_MIME_TYPES = ['image/png', 'image/webp', 'image/jpeg'] as const;
 
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Builds a tenant-scoped object key. Does not upload.

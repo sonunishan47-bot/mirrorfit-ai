@@ -29,14 +29,7 @@ export const POSE_LANDMARKS = [
 
 export type PoseLandmarkName = (typeof POSE_LANDMARKS)[number];
 
-export const BODY_REGIONS = [
-  'UPPER_BODY',
-  'LOWER_BODY',
-  'ARMS',
-  'HANDS',
-  'TORSO',
-  'LEGS',
-] as const;
+export const BODY_REGIONS = ['UPPER_BODY', 'LOWER_BODY', 'ARMS', 'HANDS', 'TORSO', 'LEGS'] as const;
 
 export type BodyRegionName = (typeof BODY_REGIONS)[number];
 

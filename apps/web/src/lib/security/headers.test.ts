@@ -17,9 +17,7 @@ describe('security headers', () => {
     expect(csp).not.toMatch(/'unsafe-eval'/);
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
     expect(csp).toContain(`img-src 'self' data: blob: ${SUPABASE}`);
-    expect(csp).toContain(
-      `connect-src 'self' ${SUPABASE} wss://ptqqmlsdsgkpqygdsupq.supabase.co`,
-    );
+    expect(csp).toContain(`connect-src 'self' ${SUPABASE} wss://ptqqmlsdsgkpqygdsupq.supabase.co`);
     expect(csp).not.toContain('storage.googleapis.com');
     expect(csp).toContain("worker-src 'self' blob:");
     expect(csp).toContain("frame-ancestors 'none'");
@@ -44,9 +42,9 @@ describe('security headers', () => {
 
     expect(development.find((h) => h.key === 'Strict-Transport-Security')).toBeUndefined();
     expect(development.find((h) => h.key === 'Content-Security-Policy')).toBeUndefined();
-    expect(buildContentSecurityPolicy({ nodeEnv: 'development', supabaseUrl: SUPABASE })).not.toContain(
-      'upgrade-insecure-requests',
-    );
+    expect(
+      buildContentSecurityPolicy({ nodeEnv: 'development', supabaseUrl: SUPABASE }),
+    ).not.toContain('upgrade-insecure-requests');
   });
 
   it('always sets clickjacking, MIME, referrer, and camera Permissions-Policy', () => {

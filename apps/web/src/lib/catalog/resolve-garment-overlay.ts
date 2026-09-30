@@ -5,10 +5,7 @@ import type { GarmentOverlayResponse } from '@mirrorfit/validation';
 
 import { createSupabaseAdminClient } from '@/lib/supabase/admin-client';
 
-import {
-  drawableOverlayFields,
-  preferVariantOverlay,
-} from './garment-overlay-helpers';
+import { drawableOverlayFields, preferVariantOverlay } from './garment-overlay-helpers';
 
 const SIGNED_URL_TTL_SECONDS = 120;
 
@@ -57,7 +54,11 @@ export async function resolveGarmentOverlayForShop(
     return null;
   }
 
-  const asset = await loadPreferredOverlayAsset(input.garmentId, input.variantId, input.organizationId);
+  const asset = await loadPreferredOverlayAsset(
+    input.garmentId,
+    input.variantId,
+    input.organizationId,
+  );
   if (!asset) return null;
 
   const fields = drawableOverlayFields(asset);

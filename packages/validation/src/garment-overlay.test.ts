@@ -9,7 +9,8 @@ const VARIANT = '22222222-2222-4222-8222-222222222222';
 describe('garment overlay validation', () => {
   it('accepts a device overlay response with png metadata', () => {
     const parsed = garmentOverlayResponseSchema.safeParse({
-      overlay_url: 'https://example.supabase.co/storage/v1/object/sign/garment-assets/x.png?token=abc',
+      overlay_url:
+        'https://example.supabase.co/storage/v1/object/sign/garment-assets/x.png?token=abc',
       expires_in: 120,
       width: 800,
       height: 1200,

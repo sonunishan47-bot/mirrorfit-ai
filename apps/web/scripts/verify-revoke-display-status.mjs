@@ -82,7 +82,8 @@ try {
     p_owner_name: 'P15',
     p_timezone: 'UTC',
   });
-  if (provisionError || !provisioned) throw new Error(provisionError?.message ?? 'provision failed');
+  if (provisionError || !provisioned)
+    throw new Error(provisionError?.message ?? 'provision failed');
 
   organizationId = provisioned.organization_id;
   const shopId = provisioned.shop_id;
@@ -136,7 +137,11 @@ try {
     .is('revoked_at', null);
   check('credential revoke update succeeds', !revokeError);
 
-  const { data: after } = await admin.from('displays').select('status').eq('id', display.id).single();
+  const { data: after } = await admin
+    .from('displays')
+    .select('status')
+    .eq('id', display.id)
+    .single();
   check('display.status is REVOKED after revoke', after?.status === 'REVOKED', after?.status);
 
   const otherOrg = await admin.rpc('provision_organization', {

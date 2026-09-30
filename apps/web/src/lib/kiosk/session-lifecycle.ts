@@ -86,7 +86,11 @@ export function createSessionLifecycle(): SessionLifecycleController {
       return { generation, sessionId };
     },
 
-    applyPoll(pollGeneration: number, live: LiveKioskSession | null, nowMs: number): PollApplyResult {
+    applyPoll(
+      pollGeneration: number,
+      live: LiveKioskSession | null,
+      nowMs: number,
+    ): PollApplyResult {
       if (pollGeneration !== generation) return { kind: 'stale' };
       if (opening) return { kind: 'stale' };
       if (!sessionId) return { kind: 'stale' };

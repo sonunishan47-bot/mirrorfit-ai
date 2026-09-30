@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { poseFrameFromMediaPipe, type MediaPipeLandmarkLike } from './mediapipe-landmarks';
 
 /** Synthetic official-shaped MediaPipe output. Test fixture only. */
-function blazePose(overrides: Partial<Record<number, Partial<MediaPipeLandmarkLike>>> = {}): MediaPipeLandmarkLike[] {
+function blazePose(
+  overrides: Partial<Record<number, Partial<MediaPipeLandmarkLike>>> = {},
+): MediaPipeLandmarkLike[] {
   const points: MediaPipeLandmarkLike[] = Array.from({ length: 33 }, () => ({
     x: 0.5,
     y: 0.5,
@@ -81,12 +83,7 @@ describe('poseFrameFromMediaPipe', () => {
   });
 
   it('returns null when every mapped point is invalid', () => {
-    expect(
-      poseFrameFromMediaPipe(
-        [{ x: 2, y: 2, visibility: 1 }],
-        5,
-      ),
-    ).toBeNull();
+    expect(poseFrameFromMediaPipe([{ x: 2, y: 2, visibility: 1 }], 5)).toBeNull();
   });
 
   it('rejects a non-finite timestamp', () => {
@@ -95,10 +92,7 @@ describe('poseFrameFromMediaPipe', () => {
   });
 
   it('uses presence when visibility is missing', () => {
-    const frame = poseFrameFromMediaPipe(
-      [{ x: 0.5, y: 0.2, presence: 0.8 }],
-      3,
-    );
+    const frame = poseFrameFromMediaPipe([{ x: 0.5, y: 0.2, presence: 0.8 }], 3);
     expect(frame?.keypoints[0]?.name).toBe('NOSE');
     expect(frame?.keypoints[0]?.confidence).toBe(0.8);
   });

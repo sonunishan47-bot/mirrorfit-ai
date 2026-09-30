@@ -26,10 +26,7 @@ export function createPollResilienceState(): PollResilienceState {
   };
 }
 
-export function notePollSuccess(
-  state: PollResilienceState,
-  nowMs: number,
-): PollResilienceState {
+export function notePollSuccess(state: PollResilienceState, nowMs: number): PollResilienceState {
   return {
     consecutiveFailures: 0,
     health: 'ok',

@@ -11,25 +11,30 @@ describe('fetchGarmentOverlay', () => {
   it('calls the device overlay route with a bearer and no tenancy fields', async () => {
     let url = '';
     let init: RequestInit | undefined;
-    const overlay = await fetchGarmentOverlay(SECRET, GARMENT, VARIANT, async (input, requestInit) => {
-      url = String(input);
-      init = requestInit;
-      return new Response(
-        JSON.stringify({
-          overlay_url: 'https://cdn.example/overlay.png?token=1',
-          expires_in: 120,
-          width: 400,
-          height: 600,
-          mime_type: 'image/png',
-          version: 1,
-          content_hash: HASH,
-          garment_id: GARMENT,
-          variant_id: VARIANT,
-          anchor: { x: 0.5, y: 0.25 },
-        }),
-        { status: 200 },
-      );
-    });
+    const overlay = await fetchGarmentOverlay(
+      SECRET,
+      GARMENT,
+      VARIANT,
+      async (input, requestInit) => {
+        url = String(input);
+        init = requestInit;
+        return new Response(
+          JSON.stringify({
+            overlay_url: 'https://cdn.example/overlay.png?token=1',
+            expires_in: 120,
+            width: 400,
+            height: 600,
+            mime_type: 'image/png',
+            version: 1,
+            content_hash: HASH,
+            garment_id: GARMENT,
+            variant_id: VARIANT,
+            anchor: { x: 0.5, y: 0.25 },
+          }),
+          { status: 200 },
+        );
+      },
+    );
 
     expect(url).toContain('/api/device/garment-overlay?');
     expect(url).toContain(`garment_id=${GARMENT}`);
@@ -52,16 +57,29 @@ describe('fetchGarmentOverlay', () => {
   });
 
   it('does not invent an overlay from a malformed body', async () => {
-    const spy = vi.fn(async () => new Response(JSON.stringify({ overlay_url: 'nope' }), { status: 200 }));
-    const overlay = await fetchGarmentOverlay(SECRET, GARMENT, VARIANT, spy as unknown as typeof fetch);
+    const spy = vi.fn(
+      async () => new Response(JSON.stringify({ overlay_url: 'nope' }), { status: 200 }),
+    );
+    const overlay = await fetchGarmentOverlay(
+      SECRET,
+      GARMENT,
+      VARIANT,
+      spy as unknown as typeof fetch,
+    );
     expect(overlay).toBeNull();
   });
 
   it('returns null for empty credentials or ids without throwing', async () => {
     const spy = vi.fn();
-    await expect(fetchGarmentOverlay('', GARMENT, VARIANT, spy as unknown as typeof fetch)).resolves.toBeNull();
-    await expect(fetchGarmentOverlay(SECRET, '', VARIANT, spy as unknown as typeof fetch)).resolves.toBeNull();
-    await expect(fetchGarmentOverlay(SECRET, GARMENT, '', spy as unknown as typeof fetch)).resolves.toBeNull();
+    await expect(
+      fetchGarmentOverlay('', GARMENT, VARIANT, spy as unknown as typeof fetch),
+    ).resolves.toBeNull();
+    await expect(
+      fetchGarmentOverlay(SECRET, '', VARIANT, spy as unknown as typeof fetch),
+    ).resolves.toBeNull();
+    await expect(
+      fetchGarmentOverlay(SECRET, GARMENT, '', spy as unknown as typeof fetch),
+    ).resolves.toBeNull();
     expect(spy).not.toHaveBeenCalled();
   });
 

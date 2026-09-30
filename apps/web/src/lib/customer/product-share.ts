@@ -69,11 +69,13 @@ export function encodeWhatsAppTextQuery(text: string): string {
 }
 
 /** WhatsApp click-to-chat deep link with prefilled public product text. */
-export function buildWhatsAppShareUrl(product: ShareableProduct, phoneE164?: string | null): string {
+export function buildWhatsAppShareUrl(
+  product: ShareableProduct,
+  phoneE164?: string | null,
+): string {
   const text = buildProductShareText(product);
   const encoded = encodeWhatsAppTextQuery(text);
-  const digits =
-    typeof phoneE164 === 'string' ? phoneE164.replace(/[^\d]/g, '') : '';
+  const digits = typeof phoneE164 === 'string' ? phoneE164.replace(/[^\d]/g, '') : '';
   const path = digits.length >= 8 ? `https://wa.me/${digits}` : 'https://wa.me/';
   return `${path}?text=${encoded}`;
 }

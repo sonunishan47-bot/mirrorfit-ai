@@ -30,7 +30,13 @@ export async function ensureDevCerts(interfaces = networkInterfaces()) {
 
   const ca = await ensureCa();
   if (certsMatchHosts(hosts)) {
-    return { keyPath: KEY_PATH, certPath: CERT_PATH, caPath: CA_CERT_PATH, hosts, regenerated: false };
+    return {
+      keyPath: KEY_PATH,
+      certPath: CERT_PATH,
+      caPath: CA_CERT_PATH,
+      hosts,
+      regenerated: false,
+    };
   }
 
   console.log(

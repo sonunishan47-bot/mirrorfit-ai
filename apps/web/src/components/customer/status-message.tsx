@@ -13,9 +13,7 @@ export function StatusMessage({
       role={live === 'off' ? undefined : 'status'}
       aria-live={live}
     >
-      <h1 className="text-[2rem] font-light leading-snug text-customer-ink">
-        {title}
-      </h1>
+      <h1 className="text-[2rem] font-light leading-snug text-customer-ink">{title}</h1>
       <p className="text-base leading-relaxed text-customer-quiet">{body}</p>
     </div>
   );

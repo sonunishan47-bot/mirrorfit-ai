@@ -159,10 +159,7 @@ describe('device credential persistence', () => {
 
   it('does not collide with unrelated keys', () => {
     const store = memoryStore({ 'mirrorfit.kiosk.other': 'keep-me' });
-    saveDeviceCredential(
-      { deviceSecret: SECRET, displayId: DISPLAY_ID, displayName: null },
-      store,
-    );
+    saveDeviceCredential({ deviceSecret: SECRET, displayId: DISPLAY_ID, displayName: null }, store);
     expect(store.data['mirrorfit.kiosk.other']).toBe('keep-me');
     clearDeviceCredential(store);
     expect(store.data['mirrorfit.kiosk.other']).toBe('keep-me');

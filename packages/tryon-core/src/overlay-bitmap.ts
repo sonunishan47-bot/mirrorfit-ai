@@ -37,10 +37,7 @@ export async function loadOverlayBitmap(
     const blob = await response.blob();
     if (blob.size <= 0) return null;
     const blobType = blob.type.split(';')[0]?.trim().toLowerCase() ?? '';
-    if (
-      blobType &&
-      !OVERLAY_MIME_TYPES.includes(blobType as (typeof OVERLAY_MIME_TYPES)[number])
-    ) {
+    if (blobType && !OVERLAY_MIME_TYPES.includes(blobType as (typeof OVERLAY_MIME_TYPES)[number])) {
       return null;
     }
 

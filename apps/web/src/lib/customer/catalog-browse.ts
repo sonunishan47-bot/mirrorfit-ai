@@ -14,16 +14,13 @@ export const CATALOG_BROWSE_FILTERS: ReadonlyArray<{
   { id: 'outfits', label: 'Outfits' },
 ];
 
-const OUTFIT =
-  /^(outfits?|sets?|looks?|full[-\s]?outfits?|co-?ords?|ensembles?)$/i;
+const OUTFIT = /^(outfits?|sets?|looks?|full[-\s]?outfits?|co-?ords?|ensembles?)$/i;
 
 /**
  * Browse family for phone filters. Fitting families stay TOP / LOWER_BODY;
  * outfits are browse-only when the shop category uses those names.
  */
-export function catalogBrowseFamily(
-  category: string,
-): 'tops' | 'bottoms' | 'outfits' | 'other' {
+export function catalogBrowseFamily(category: string): 'tops' | 'bottoms' | 'outfits' | 'other' {
   const fit = resolveFitCategory(category);
   if (fit === 'TOP') return 'tops';
   if (fit === 'LOWER_BODY') return 'bottoms';

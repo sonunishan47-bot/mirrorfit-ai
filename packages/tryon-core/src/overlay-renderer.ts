@@ -2,19 +2,13 @@ import type { FittingResult } from './geometry';
 import { overlayPointFromLandmark } from './overlay-coordinates';
 import { OVERLAY_MIN_DRAW_CONFIDENCE } from './pose-thresholds';
 import { postureFadeFromYaw } from './pose-occlusion';
-import {
-  drawImageInParallelogram,
-  type WarpParallelogram,
-} from './pose-warp';
+import { drawImageInParallelogram, type WarpParallelogram } from './pose-warp';
 import type { CameraFrame, RenderingEngine, RenderTarget, StageTiming } from './providers';
 
 export interface OverlayCanvas {
   width: number;
   height: number;
-  getContext(
-    id: '2d',
-    options?: CanvasRenderingContext2DSettings,
-  ): CanvasRenderingContext2D | null;
+  getContext(id: '2d', options?: CanvasRenderingContext2DSettings): CanvasRenderingContext2D | null;
 }
 
 /** Normalized pivot inside the garment bitmap (0..1). Shoulders ≈ y 0.2–0.35. */
@@ -133,14 +127,7 @@ export class OverlayRenderer implements RenderingEngine {
     const warp = options?.warp ?? null;
 
     if (warp) {
-      const warped = drawImageInParallelogram(
-        context,
-        this.#bitmap,
-        warp,
-        width,
-        height,
-        alpha,
-      );
+      const warped = drawImageInParallelogram(context, this.#bitmap, warp, width, height, alpha);
       if (warped) {
         return Promise.resolve({ durationMs: now() - started });
       }
@@ -150,9 +137,7 @@ export class OverlayRenderer implements RenderingEngine {
     const center = overlayPointFromLandmark(fit.transform.translate);
     const drawW = Math.max(fit.transform.scaleX * width, 1);
     const drawH = Math.max(
-      this.#layout.aspectRatio
-        ? drawW / this.#layout.aspectRatio
-        : fit.transform.scaleY * height,
+      this.#layout.aspectRatio ? drawW / this.#layout.aspectRatio : fit.transform.scaleY * height,
       1,
     );
     const anchor = this.#layout.anchor;
@@ -259,16 +244,12 @@ export const TEST_FIXTURE_PANTS_LAYOUT: OverlayLayout = {
   aspectRatio: 180 / 320,
 };
 
-export function resolveDrawAlpha(
-  confidence: number,
-  options?: OverlayRenderOptions,
-): number {
+export function resolveDrawAlpha(confidence: number, options?: OverlayRenderOptions): number {
   const conf = Number.isFinite(confidence) ? Math.min(1, Math.max(0, confidence)) : 0;
   if (typeof options?.opacity === 'number' && Number.isFinite(options.opacity)) {
     return Math.min(1, Math.max(0, options.opacity));
   }
-  const yaw =
-    typeof options?.yaw === 'number' && Number.isFinite(options.yaw) ? options.yaw : 0;
+  const yaw = typeof options?.yaw === 'number' && Number.isFinite(options.yaw) ? options.yaw : 0;
   return Math.min(1, Math.max(0, conf * postureFadeFromYaw(yaw)));
 }
 

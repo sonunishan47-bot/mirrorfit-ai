@@ -32,8 +32,7 @@ export interface KeyValueStore {
 export type DeviceStorageFailureReason = 'unavailable' | 'invalid' | 'quota' | 'restricted';
 
 export type SaveDeviceCredentialResult =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly reason: DeviceStorageFailureReason };
+  { readonly ok: true } | { readonly ok: false; readonly reason: DeviceStorageFailureReason };
 
 const DEVICE_SECRET = /^[A-Za-z0-9_-]{43}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -60,7 +59,11 @@ function safeGetItem(store: KeyValueStore, key: string): string | null {
   }
 }
 
-function safeSetItem(store: KeyValueStore, key: string, value: string): DeviceStorageFailureReason | null {
+function safeSetItem(
+  store: KeyValueStore,
+  key: string,
+  value: string,
+): DeviceStorageFailureReason | null {
   try {
     store.setItem(key, value);
     return null;

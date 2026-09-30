@@ -120,14 +120,7 @@ describe('drawImageInParallelogram', () => {
     } as unknown as CanvasRenderingContext2D;
 
     const bitmap = { width: 200, height: 280 } as CanvasImageSource;
-    const ok = drawImageInParallelogram(
-      context,
-      bitmap,
-      quad!,
-      canvasWidth,
-      canvasHeight,
-      1,
-    );
+    const ok = drawImageInParallelogram(context, bitmap, quad!, canvasWidth, canvasHeight, 1);
     expect(ok).toBe(true);
     expect(transform).not.toBeNull();
     // a,b = top edge; c,d = left edge; e,f = top-left — unit square → parallelogram.

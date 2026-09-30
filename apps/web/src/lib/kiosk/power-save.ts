@@ -44,19 +44,13 @@ export function evaluatePowerSave(input: {
  * Whether MediaPipe / try-on processing should run.
  * Power-save pauses intensive vision work while the session may still be open.
  */
-export function shouldRunTryOnPipeline(
-  kioskStatus: KioskStatus,
-  phase: PowerSavePhase,
-): boolean {
+export function shouldRunTryOnPipeline(kioskStatus: KioskStatus, phase: PowerSavePhase): boolean {
   return kioskStatus === 'ACTIVE' && phase === 'awake';
 }
 
 /**
  * Whether the branded screensaver overlay should cover the viewport.
  */
-export function shouldShowScreensaver(
-  kioskStatus: KioskStatus,
-  phase: PowerSavePhase,
-): boolean {
+export function shouldShowScreensaver(kioskStatus: KioskStatus, phase: PowerSavePhase): boolean {
   return phase === 'saving' && isPowerSaveEligible(kioskStatus);
 }

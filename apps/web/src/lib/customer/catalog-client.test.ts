@@ -7,23 +7,25 @@ const TOKEN = 'p'.repeat(43);
 describe('customer catalog client', () => {
   it('maps a shop catalog and does not invent rows', async () => {
     const items = await listSessionCatalog(TOKEN, () => {
-      return Promise.resolve(new Response(
-        JSON.stringify({
-          garments: [
-            {
-              garment_id: '33333333-3333-4333-8333-333333333333',
-              variant_id: '55555555-5555-4555-8555-555555555555',
-              name: 'Shop tee',
-              category: 'Tops',
-              color_name: 'Black',
-              is_test_fixture: false,
-              has_thumbnail: false,
-              sizes: ['M'],
-            },
-          ],
-        }),
-        { status: 200 },
-      ));
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            garments: [
+              {
+                garment_id: '33333333-3333-4333-8333-333333333333',
+                variant_id: '55555555-5555-4555-8555-555555555555',
+                name: 'Shop tee',
+                category: 'Tops',
+                color_name: 'Black',
+                is_test_fixture: false,
+                has_thumbnail: false,
+                sizes: ['M'],
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
     });
     expect(items).toEqual([
       {
@@ -80,9 +82,8 @@ describe('customer catalog client', () => {
   });
 
   it('returns an empty list when the shop has no garments', async () => {
-    const items = await listSessionCatalog(
-      TOKEN,
-      () => Promise.resolve(new Response(JSON.stringify({ garments: [] }), { status: 200 })),
+    const items = await listSessionCatalog(TOKEN, () =>
+      Promise.resolve(new Response(JSON.stringify({ garments: [] }), { status: 200 })),
     );
     expect(items).toEqual([]);
   });

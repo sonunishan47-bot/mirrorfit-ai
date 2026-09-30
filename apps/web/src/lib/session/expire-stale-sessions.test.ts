@@ -21,7 +21,9 @@ const ORG_B = 'org-b';
 const DISPLAY_A = 'display-a';
 const DISPLAY_B = 'display-b';
 
-function row( partial: Partial<ExpirableSessionRow> & Pick<ExpirableSessionRow, 'id' | 'status'>): ExpirableSessionRow {
+function row(
+  partial: Partial<ExpirableSessionRow> & Pick<ExpirableSessionRow, 'id' | 'status'>,
+): ExpirableSessionRow {
   return {
     displayId: DISPLAY_A,
     organizationId: ORG_A,

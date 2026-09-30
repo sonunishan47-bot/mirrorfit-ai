@@ -12,11 +12,7 @@ import {
   readLiveSession,
 } from './session-client';
 import { pairingQrValue } from './pairing-qr';
-import {
-  createPollResilienceState,
-  notePollFailure,
-  notePollSuccess,
-} from './poll-resilience';
+import { createPollResilienceState, notePollFailure, notePollSuccess } from './poll-resilience';
 
 const SECRET = 'e'.repeat(43);
 const TOKEN = 'f'.repeat(43);
@@ -179,9 +175,9 @@ describe('live session read', () => {
   });
 
   it('does not map 5xx onto SESSION_ENDED through eventFromLiveSession', async () => {
-    await expect(readLiveSession(SECRET, async () => new Response(null, { status: 500 }))).rejects.toThrow(
-      LiveSessionPollError,
-    );
+    await expect(
+      readLiveSession(SECRET, async () => new Response(null, { status: 500 })),
+    ).rejects.toThrow(LiveSessionPollError);
     // Only an explicit empty read (null) ends; errors never reach event mapping.
     expect(eventFromLiveSession(null, SESSION_ID, Date.now())).toBe('SESSION_ENDED');
   });

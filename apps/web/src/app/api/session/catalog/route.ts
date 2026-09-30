@@ -31,8 +31,5 @@ export async function GET(request: Request): Promise<NextResponse> {
     return clientError('INTERNAL');
   }
 
-  return NextResponse.json(
-    { garments },
-    { headers: { 'Cache-Control': 'no-store' } },
-  );
+  return NextResponse.json({ garments }, { headers: { 'Cache-Control': 'no-store' } });
 }

@@ -131,7 +131,8 @@ export function presentTryOn(status: TryOnRuntimeStatus): {
       return {
         status,
         label: 'FIT NOT READY',
-        honesty: 'Shoulders and hips are not confident enough, or this category is not implemented.',
+        honesty:
+          'Shoulders and hips are not confident enough, or this category is not implemented.',
       };
     case 'FITTING':
       return {

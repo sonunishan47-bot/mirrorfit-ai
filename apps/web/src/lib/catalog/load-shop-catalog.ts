@@ -2,11 +2,8 @@ import 'server-only';
 
 import { createSupabaseAdminClient } from '@/lib/supabase/admin-client';
 
-import {
-  filterCatalogForShop,
-  type CatalogExtras,
-  type TenantScope,
-} from './shop-catalog';
+import { filterCatalogForShop, type CatalogExtras, type TenantScope } from './shop-catalog';
+import { ensureTrialGarments, type TrialWriter } from './trial-garments';
 
 /**
  * Active catalog for one already-resolved shop.
@@ -17,10 +14,17 @@ import {
  */
 export async function loadShopCatalog(scope: TenantScope) {
   const supabase = createSupabaseAdminClient();
+  // Shirt and pants for a physical check. Failure must not hide the real catalog.
+  await ensureTrialGarments(supabase as unknown as TrialWriter, {
+    organization_id: scope.organizationId,
+    shop_id: scope.shopId,
+  });
   const [garments, variants, charts, measurements, thumbnails, overlays] = await Promise.all([
     supabase
       .from('garments')
-      .select('id, organization_id, shop_id, name, category, brand, price_minor, currency_code, is_active')
+      .select(
+        'id, organization_id, shop_id, name, category, brand, price_minor, currency_code, is_active',
+      )
       .eq('organization_id', scope.organizationId)
       .eq('shop_id', scope.shopId)
       .eq('is_active', true),

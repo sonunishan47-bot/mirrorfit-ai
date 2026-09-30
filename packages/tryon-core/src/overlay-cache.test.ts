@@ -31,7 +31,7 @@ describe('OverlayBitmapCache', () => {
     expect(cache.get('1'.repeat(64))).not.toBeNull();
     cache.set('3'.repeat(64), { bitmap: third, width: 1, height: 1 });
     expect(cache.has('2'.repeat(64))).toBe(false);
-    expect((second.close as ReturnType<typeof vi.fn>)).toHaveBeenCalledOnce();
+    expect(second.close as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
     expect(cache.has('1'.repeat(64))).toBe(true);
     expect(cache.has('3'.repeat(64))).toBe(true);
   });
