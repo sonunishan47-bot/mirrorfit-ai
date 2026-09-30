@@ -4,6 +4,11 @@ B2B retail smart mirror platform. A customer scans a QR code on an in-store
 mirror, browses the shop catalog from their own phone, and sees the selected
 garment rendered live on the mirror display.
 
+**This is not a Phase 1 scaffold.** The old README line that the repo was
+“Phase 1 only” and that the kiosk was not implemented is obsolete. Pairing,
+the shop mirror, the phone catalog, staff catalog, and live pose fitting are
+in this repository.
+
 **Current state.** The shop mirror pairs by QR, the phone browses that shop’s catalog, and shirts and pants track locally with MediaPipe. Dress, abaya, kurta, churidar, and thobe track as a labelled pose silhouette — not the shirt warp, and not a photo. A consented still can be sent to a private GPU worker (`WORKER_ENDPOINT_URL`) without a fake image. Size advice, a 3D mannequin, bilingual catalog commands, and plan quotas are in the app. They do not replace the live camera path, and they do not call a language model or a VTON checkpoint unless you connect one.
 
 ## Layout
@@ -106,5 +111,5 @@ Targets, measured rather than asserted:
 
 ## Roadmap
 
-Shipped in this repository: tenancy, device enrollment, QR pairing, phone catalog, live pose fitting, full-body silhouettes, consented still jobs, a GPU worker boundary, size advice, a 3D mannequin, and shop operations. Still not connected: a real VTON checkpoint on the worker. That is a machine and a licence, not another app rewrite.
+The Phase 1-only roadmap is retired. Shipped here: tenancy, device enrollment, QR pairing, phone catalog, staff catalog at `/catalog`, live pose fitting, full-body silhouettes, trial shirt and pants, consented still jobs, a GPU worker boundary, size advice, a 3D mannequin, and shop operations. Still not connected: a real VTON checkpoint on the worker. That is a machine and a licence, not another app rewrite. The app does not draw a fake photograph while that URL is unset.
 
