@@ -93,6 +93,28 @@ export function CreateGarmentForm({ shops }: { shops: readonly Shop[] }) {
           className={inputClass}
         />
       </label>
+      <label className="space-y-1.5 text-sm sm:col-span-2">
+        <span className="block text-secondary">Fabric and details, optional</span>
+        <input
+          name="fabric_and_details"
+          maxLength={160}
+          placeholder="cotton poplin, white buttons"
+          className={inputClass}
+        />
+      </label>
+      <label className="space-y-1.5 text-sm">
+        <span className="block text-secondary">Fit, optional</span>
+        <input name="fit" maxLength={80} placeholder="relaxed" className={inputClass} />
+      </label>
+      <label className="space-y-1.5 text-sm">
+        <span className="block text-secondary">Extra line, optional</span>
+        <input
+          name="extra_prompt"
+          maxLength={200}
+          placeholder="side slits"
+          className={inputClass}
+        />
+      </label>
       <div className="flex items-end">
         <button
           type="submit"
@@ -104,7 +126,8 @@ export function CreateGarmentForm({ shops }: { shops: readonly Shop[] }) {
       </div>
       <p className="text-xs text-muted sm:col-span-2">
         Sizes S, M, and L are added with the garment. Dress, abaya, kurta, churidar, and thobe are
-        recognised on the mirror as a pose silhouette, not a photograph.
+        recognised on the mirror as a pose silhouette, not a photograph. Fabric, fit, and the extra
+        line are used only by the local delayed clip. They are not sent to the phone.
       </p>
       {state.message ? (
         <p

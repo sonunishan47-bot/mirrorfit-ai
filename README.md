@@ -107,9 +107,40 @@ Targets, measured rather than asserted:
 - **Shirt and pants:** live pose warp of an overlay on the mirror. Not a photograph.
 - **Dress, abaya, kurta, churidar, thobe:** recognised. A pose silhouette tracks the shoulders to the hem. It is not the shirt warp and not a photograph. An uploaded overlay image, if the shop has one, is placed on that same hem.
 - **Photorealistic still:** the mirror asks for consent, holds for three seconds, then `POST /api/device/tryon-jobs` stores one JPEG. The worker claims `/api/worker/tryon-jobs/claim` and completes `/api/worker/tryon-jobs/complete`. The shop model is FASHN (`MODEL_NAME=fashn`, `services/still-vton`). It keeps the captured face and can place a plain studio plate behind the person. Point it at `WORKER_ENDPOINT_URL`. `RUNPOD_ENDPOINT_URL` is only a legacy alias for that same URL. If the URL or the weights are unset the job fails and the live overlay stays. The app does not draw a fake result. It is not a live video.
-- **Catalog:** staff add garments at `/catalog` after signing in. The seed script is only for the labelled trial shirt and pants.
+- **Catalog:** staff add garments at `/catalog` after signing in. The seed script is only for the labelled trial shirt and pants. Fabric, fit, and an extra line on that form are stored on the garment for the delayed clip below. They are not shown as a second catalog.
+
+## Store delayed try-on (Lucy Edit Dev)
+
+This is optional and off until `LUCY_EDIT_DEV=1`. It does not replace the live pose overlay or the FASHN still. It does not call Decart, and it does not add a checkout.
+
+**License.** Lucy Edit Dev weights are non-commercial. Do not charge for this path. The flag does not make the weights commercial.
+
+**What the customer sees.** The mirror keeps the live camera. The phone catalog is unchanged and does not receive the clip or a body image. When a garment is selected, the mirror keeps the last valid webcam segment (12 seconds, restarted so the file stays playable) and sends the last 6 seconds to ComfyUI on this computer. One GPU job runs at a time. A third tap while one is running and one is waiting is refused. The result plays on the mirror, then the live preview returns. If ComfyUI is down, the live preview stays. Nothing is invented.
+
+**Prompt.** `Change the outfit to a {color} {garment}, {fabric_and_details}, {fit}, natural folds and drape, realistic studio lighting, full-body mid-shot.` An optional extra line is appended. The prompt does not say to preserve a face.
+
+**Install, on the shop PC.**
+
+1. ComfyUI, plus [DecartAI/lucy-edit-comfyui](https://github.com/DecartAI/lucy-edit-comfyui), [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite) (`VHS_LoadVideoFFmpeg`), and [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) (`ImageResizeKJv2`).
+2. Weights, not stored in this repo:
+   - `ComfyUI/models/diffusion_models/lucy-edit-1.1-dev-cui-fp16.safetensors`
+   - `ComfyUI/models/vae/wan2.2_vae.safetensors`
+   - `ComfyUI/models/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors` (CLIP type `wan`)
+3. Start ComfyUI on `127.0.0.1:8188`. On an 8GB card, start it with `--lowvram`.
+4. In `apps/web/.env.local` set `LUCY_EDIT_DEV=1`. Optional: `COMFYUI_URL`, `LUCY_VRAM_PROFILE`, `LUCY_UNET_NAME`.
+5. Start MirrorFit with `pnpm dev` (or the production server). The phone uses the same host as the mirror QR: `/s?t=…` on the shop LAN. The clip itself stays on the mirror.
+
+**VRAM profiles.** Heights are multiples of 32 because the Lucy graph requires it. `640x360` is sent as `640x352`. `720p` is sent as `1280x704`.
+
+| Profile | Input | FPS | Frames | Steps |
+| --- | --- | --- | --- | --- |
+| `gpu_8gb` | 640×480 | 12 | 17 | 8 |
+| `gpu_12gb` (default) | 640×352 | 16 | 25 | 10 |
+| `gpu_16gb_plus` | 1280×704 | 16 | 33 | 12 |
+
+Shop cards will not match a hosted per-second model. These frame counts are the local budget, not a 30fps claim. The route waits up to two minutes and then leaves the live preview in place.
 
 ## Roadmap
 
-The Phase 1-only roadmap is retired. Shipped here: tenancy, device enrollment, QR pairing, phone catalog, staff catalog at `/catalog`, live pose fitting, full-body silhouettes, trial shirt and pants, consented still jobs, a GPU worker boundary, size advice, a 3D mannequin, and shop operations. Still not connected: a real VTON checkpoint on the worker. That is a machine and a licence, not another app rewrite. The app does not draw a fake photograph while that URL is unset.
+The Phase 1-only roadmap is retired. Shipped here: tenancy, device enrollment, QR pairing, phone catalog, staff catalog at `/catalog`, live pose fitting, full-body silhouettes, trial shirt and pants, consented still jobs, a GPU worker boundary, size advice, a 3D mannequin, shop operations, and an optional local Lucy clip path. Still not connected until the shop installs them: FASHN weights for the still worker, and Lucy Edit Dev weights in ComfyUI. That is a machine and a licence, not another app rewrite. The app does not draw a fake photograph or a fake clip while those are unset.
 

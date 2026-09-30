@@ -35,4 +35,7 @@ export const garmentCreateSchema = z.object({
     .refine((value) => value === '' || /^\d+$/.test(value), 'price must be a whole number')
     .transform((value) => (value === '' ? null : Number(value)))
     .refine((value) => value === null || value <= 100_000_000, 'price is too large'),
+  fabric_and_details: z.string().trim().max(160).optional().default(''),
+  fit: z.string().trim().max(80).optional().default(''),
+  extra_prompt: z.string().trim().max(200).optional().default(''),
 });

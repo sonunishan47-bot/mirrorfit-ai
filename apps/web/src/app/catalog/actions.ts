@@ -8,6 +8,7 @@ import { garmentCreateSchema, uuidSchema } from '@mirrorfit/validation';
 import { recordStaffAction } from '@/lib/audit';
 import { requireStaffRank } from '@/lib/auth/staff';
 import { createSupabaseServerClient } from '@/lib/supabase/server-client';
+import { lucyDescription } from '@/lib/tryon/lucy-prompt';
 
 export interface CatalogActionResult {
   readonly ok: boolean;
@@ -42,6 +43,9 @@ export async function createGarment(
     color_name: formData.get('color_name'),
     color_hex: formData.get('color_hex'),
     price_minor: formData.get('price_minor') ?? '',
+    fabric_and_details: formData.get('fabric_and_details') ?? '',
+    fit: formData.get('fit') ?? '',
+    extra_prompt: formData.get('extra_prompt') ?? '',
   });
   if (!parsed.success) {
     return { ok: false, message: 'Check the name, category, colour, and price.' };
@@ -52,6 +56,11 @@ export async function createGarment(
 
   const sku = parsed.data.sku.length > 0 ? parsed.data.sku : skuFromName(parsed.data.name);
   const price = parsed.data.price_minor;
+  const description = lucyDescription({
+    fabricAndDetails: parsed.data.fabric_and_details,
+    fit: parsed.data.fit,
+    extraPrompt: parsed.data.extra_prompt,
+  });
   const supabase = await createSupabaseServerClient();
   const { data: garment, error } = await supabase
     .from('garments')
@@ -62,6 +71,7 @@ export async function createGarment(
       name: parsed.data.name,
       category: parsed.data.category,
       brand: null,
+      description,
       price_minor: price,
       currency_code: price === null ? null : 'SAR',
       is_active: true,

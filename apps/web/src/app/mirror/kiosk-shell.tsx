@@ -50,6 +50,7 @@ import {
 import { createSessionLifecycle } from '@/lib/kiosk/session-lifecycle';
 import { kioskSessionPollMs } from '@/lib/kiosk/session-poll';
 import { KioskScreensaver } from './kiosk-screensaver';
+import { LucyClipStage } from './lucy-clip-stage';
 import { TryOnPanel } from './tryon-panel';
 import { UnenrolledPanel } from './unenrolled-panel';
 
@@ -542,6 +543,19 @@ export function KioskShell() {
         playsInline
         autoPlay
         aria-hidden
+      />
+      <LucyClipStage
+        videoRef={videoRef}
+        active={Boolean(device) && tryOnActive}
+        garment={
+          customerGarment
+            ? {
+                garmentId: customerGarment.garmentId,
+                variantId: customerGarment.variantId,
+              }
+            : null
+        }
+        getSessionId={() => lifecycleRef.current.getSessionId()}
       />
       {/* Dims the camera only — translucent; must stay below the try-on overlay. */}
       <div className="pointer-events-none absolute inset-0 z-[1] bg-base/40" aria-hidden />

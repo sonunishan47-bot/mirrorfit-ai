@@ -51,6 +51,8 @@ Production garment overlays use the private `garment-assets` Storage bucket (see
 
 Optional realistic try-on stills use a separate private `tryon-private` bucket (`*_tryon_private_bucket.sql`). Apply that migration before enabling the worker. The browser never receives the bucket path. `WORKER_SECRET` (16+ characters) and `WORKER_ENDPOINT_URL` are optional and are not part of the client bundle. `RUNPOD_ENDPOINT_URL` is a legacy alias for the same private URL. If the endpoint is unset the provider stays **not connected** and jobs fail with `VTON_NOT_CONNECTED` instead of a fake image. See `docs/vton-pre-gpu.md`. Run `pnpm --filter @mirrorfit/web tryon-worker` on the GPU machine (RTX 4090 24GB is enough for current still-image VTON; no public GPU port). The mirror does not call the GPU.
 
+Optional delayed clips (`LUCY_EDIT_DEV`, `COMFYUI_URL`, `LUCY_VRAM_PROFILE`, `LUCY_UNET_NAME`) stay on the shop machine and talk only to local ComfyUI. They are not a phone download. Lucy Edit Dev is non-commercial. See the README section “Store delayed try-on (Lucy Edit Dev)”.
+
 ## MediaPipe assets
 
 `pnpm build` / `pnpm dev` run `apps/web/scripts/copy-mediapipe-wasm.mjs`, which:

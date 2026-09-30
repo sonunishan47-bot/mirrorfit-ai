@@ -45,7 +45,7 @@ describe('try-on route boundaries', () => {
   it('does not let the phone catalog call the try-on job client', () => {
     const catalog = source('src/app/s/session-catalog.tsx');
     const phoneClient = source('src/lib/customer/catalog-client.ts');
-    expect(`${catalog}\n${phoneClient}`).not.toMatch(/tryon-job-client|tryon-jobs/);
+    expect(`${catalog}\n${phoneClient}`).not.toMatch(/tryon-job-client|tryon-jobs|lucy-clip/);
   });
 
   it('fails a missing model instead of painting a fake result', () => {

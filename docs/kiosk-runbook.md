@@ -8,10 +8,13 @@ not invent a photographic result.
 
 ## Privacy reminder
 
-- The live camera stays on the mirror. Frames are not streamed.
+- The live camera stays on the mirror. Frames are not streamed to the phone.
 - A realistic try-on, only after the on-mirror “Allow one still” control,
   uploads one JPEG. It is stored privately and deleted when the session ends
   or the input expires (about 20 minutes).
+- If `LUCY_EDIT_DEV=1`, a garment pick can send the last few seconds of this
+  mirror’s camera to ComfyUI on the same PC. That clip is not sent to the phone.
+  Lucy Edit Dev weights are non-commercial. Do not charge for that path.
 - Do not discuss or guess ethnicity, health, or other sensitive attributes.
 - Pairing QR codes encode only a short-lived session link (`/s?t=…`), never a
   device secret.

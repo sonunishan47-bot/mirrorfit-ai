@@ -37,6 +37,10 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ['@mediapipe/tasks-vision'],
   typedRoutes: true,
   allowedDevOrigins: [...ALLOWED_DEV_ORIGINS],
+  experimental: {
+    // The proxy default is 10MB. A 12s mirror segment can be larger than that.
+    proxyClientMaxBodySize: '16mb',
+  },
   /*
    * Next writes AGENTS.md and CLAUDE.md on every dev run. This repository
    * keeps its own guidance in .cursor/rules, and a file the framework
